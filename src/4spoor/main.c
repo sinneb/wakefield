@@ -1,3 +1,23 @@
+/*
+
+4spoor mini-sampler
+===================
+
+A sampler / sampleplayer capable of:
+
+- Realtime stretching of 4 tracks of streaming audio from the SD-card based on global tempo
+- Tap-tempo for global tempo
+
+Technical operation:
+4 wav files are opened simultaneously from the SD
+Based on the global tempo, a number of byte are read from each file
+These bytes are interpolated to the samplerate
+The streams are mixed and played
+
+Sample playback is started per sample through a button on the LCD
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -31,6 +51,8 @@ char audioFilename1[] = "0:sound.wav";
 char audioFilename2[] = "0:sound2.wav";
 char audioFilename3[] = "0:sound3.wav";
 char audioFilename4[] = "0:sound4.wav";
+
+char *audioFilename[4] = {"0:sound.wav", "0:sound2.wav", "0:sound3.wav", "0:sound4.wav"};
 //char audioFilename[4][50];
 //audioFilename[][0] = "0:sound.wav";
 //char audioFilenames[5][100];
@@ -43,6 +65,8 @@ static uint8_t audioBufFile1[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioBufFile2[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioBufFile3[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioBufFile4[AUDIO_DMA_BUFFER_SIZE];
+
+uint8_t *audioBufFiles[4][AUDIO_DMA_BUFFER_SIZE];
 
 uint16_t taptempo[4];
 uint8_t taptempocounter;
@@ -145,7 +169,7 @@ int main() {
 }
 
 static void init_after_USB() {
-    if (f_open(&audio_file[0], audioFilename1, FA_READ) == FR_OK) {
+    if (f_open(&audio_file[0], audioFilename[0], FA_READ) == FR_OK) {
 		// f_open ok
       f_lseek(&audio_file[0], f_size(&audio_file[0]));
     } else {
@@ -154,7 +178,7 @@ static void init_after_USB() {
       Error_Handler();
     }
 	
-    if (f_open(&audio_file[1], audioFilename2, FA_READ) == FR_OK) {
+    if (f_open(&audio_file[1], audioFilename[1], FA_READ) == FR_OK) {
 		// f_open ok
       f_lseek(&audio_file[1], f_size(&audio_file[1]));
     } else {
@@ -163,7 +187,7 @@ static void init_after_USB() {
       Error_Handler();
     }
 
-        if (f_open(&audio_file[2], audioFilename3, FA_READ) == FR_OK) {
+        if (f_open(&audio_file[2], audioFilename[2], FA_READ) == FR_OK) {
     // f_open ok
           f_lseek(&audio_file[2], f_size(&audio_file[2]));
         } else {
@@ -171,7 +195,7 @@ static void init_after_USB() {
                                     (uint8_t *)"ERROR3", CENTER_MODE);
           Error_Handler();
         }
-        if (f_open(&audio_file[3], audioFilename4, FA_READ) == FR_OK) {
+        if (f_open(&audio_file[3], audioFilename[3], FA_READ) == FR_OK) {
     // f_open ok
           f_lseek(&audio_file[3], f_size(&audio_file[3]));
         } else {
@@ -303,7 +327,6 @@ void computeAudio() {
 		f_bufPre4_right[j/4] = ((float)righty4/32768);
 }
 
-	
 	inter1parray( f_bufPre_left, bufsize / 4, f_bufPost_left, 512 );
 	inter1parray( f_bufPre_right, bufsize / 4, f_bufPost_right, 512 );
 	inter1parray( f_bufPre2_left, bufsize / 4, f_bufPost2_left, 512 );
@@ -313,9 +336,6 @@ void computeAudio() {
 	inter1parray( f_bufPre4_left, bufsize / 4, f_bufPost4_left, 512 );
 	inter1parray( f_bufPre4_right, bufsize / 4, f_bufPost4_right, 512 );
 	
-  
-  
-  
 	// the mix
 	// float to short
 	for (int k=0; k<2048; k=k+4) {
