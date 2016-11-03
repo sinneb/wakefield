@@ -36,31 +36,22 @@ const uint32_t LCDColorarray[] = { LCD_COLOR_YELLOW, LCD_COLOR_GREEN, LCD_COLOR_
 #define AUDIO_DMA_BUFFER_SIZE4 (AUDIO_DMA_BUFFER_SIZE >> 2)
 #define AUDIO_DMA_BUFFER_SIZE8 (AUDIO_DMA_BUFFER_SIZE >> 3)
 
+#define BAUDRATE              31250
+#define TXPIN                 GPIO_PIN_6
+#define RXPIN                 GPIO_PIN_7
+#define DATAPORT              GPIOC
+#define UART_PRIORITY         6
+#define UART_RX_SUBPRIORITY   0
+#define MAXCLISTRING          100 // Biggest string the user will type
+
+uint8_t rxBuffer = '\000'; // where we store that one character that just came in
+uint8_t rxString[MAXCLISTRING]; // where we build our string from characters coming in
+int rxindex = 0; // index for going though rxString
+
+UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
+
 char *audioFilename[4] = {"0:sound.wav", "0:sound2.wav", "0:sound3.wav", "0:sound4.wav"};
-
-// waves
-uint8_t sswave[100][50] = {
-  {24, 28, 31, 34, 37, 39, 42, 44, 46, 47, 48, 49, 49, 49, 49, 48, 47, 46, 44, 42, 39, 37, 34, 31, 28, 24, 21, 18, 15, 12, 10, 7, 5, 3, 2, 1, 0, 0, 0, 0, 1, 2, 3, 5, 7, 10, 12, 15, 18, 21},
-  {34, 49, 46, 45, 44, 41, 40, 38, 34, 34, 30, 26, 26, 23, 22, 21, 21, 20, 20, 19, 19, 18, 17, 17, 17, 17, 17, 17, 17, 17, 29, 29, 28, 27, 27, 27, 25, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17},
-  {25, 27, 27, 27, 27, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 26, 26, 26, 27, 33, 24, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 22, 22, 22, 22, 22, 23, 23, 23, 22, 16},
-  {25, 25, 25, 26, 26, 27, 27, 28, 29, 30, 30, 31, 32, 33, 34, 34, 34, 33, 33, 33, 33, 32, 32, 32, 32, 31, 31, 31, 30, 22, 7, 0, 2, 10, 12, 14, 15, 16, 17, 18, 19, 19, 20, 21, 21, 22, 23, 23, 24, 24},
-  {25, 26, 29, 32, 35, 41, 46, 49, 49, 48, 46, 45, 43, 42, 41, 39, 38, 37, 36, 35, 34, 33, 31, 28, 24, 19, 11, 5, 1, 0, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21, 23},
-  {25, 48, 49, 44, 37, 34, 31, 30, 31, 30, 24, 15, 11, 13, 18, 22, 24, 24, 25, 26, 28, 31, 33, 27, 24, 24, 32, 28, 24, 24, 24, 24, 23, 18, 17, 12, 10, 11, 13, 18, 16, 19, 21, 22, 27, 27, 22, 20, 18, 20},
-  {25, 33, 36, 36, 36, 37, 38, 49, 49, 47, 40, 34, 31, 29, 29, 29, 26, 17, 12, 11, 15, 20, 22, 21, 17, 15, 14, 15, 17, 17, 13, 11, 13, 17, 16, 17, 22, 28, 32, 34, 32, 30, 26, 23, 20, 18, 16, 12, 14, 19},
-  {25, 27, 31, 36, 41, 45, 48, 49, 48, 47, 48, 47, 46, 42, 39, 35, 33, 33, 33, 32, 29, 27, 26, 25, 23, 20, 16, 12, 7, 3, 1, 0, 0, 0, 1, 4, 8, 11, 14, 17, 20, 21, 20, 20, 19, 17, 16, 19, 22, 23},
-  {25, 32, 39, 45, 49, 49, 48, 44, 39, 32, 27, 24, 24, 26, 26, 25, 22, 22, 22, 28, 32, 35, 31, 23, 16, 10, 6, 4, 2, 1, 2, 5, 13, 23, 30, 33, 34, 33, 32, 34, 31, 30, 26, 20, 13, 11, 9, 8, 11, 17},
-  {24, 27, 30, 32, 33, 35, 37, 38, 40, 41, 42, 43, 43, 44, 44, 45, 44, 44, 42, 42, 40, 39, 37, 35, 32, 29, 26, 23, 20, 17, 14, 11, 8, 6, 3, 2, 0, 0, 0, 0, 1, 2, 3, 5, 8, 11, 13, 16, 19, 22},
-  {25, 28, 30, 30, 31, 33, 35, 34, 32, 30, 30, 32, 35, 37, 39, 39, 40, 36, 32, 29, 27, 23, 19, 19, 17, 15, 12, 9, 10, 9, 6, 5, 6, 8, 10, 10, 8, 4, 3, 1, 0, 0, 3, 8, 10, 13, 17, 20, 21, 23},
-  {25, 31, 37, 42, 47, 49, 48, 46, 44, 39, 36, 37, 38, 36, 37, 40, 40, 37, 30, 24, 16, 10, 7, 8, 10, 12, 17, 21, 20, 16, 15, 13, 8, 5, 4, 3, 7, 12, 15, 18, 18, 19, 20, 15, 9, 6, 6, 7, 15, 20},
-  {24, 25, 26, 28, 22, 22, 19, 23, 25, 24, 25, 31, 33, 30, 29, 29, 26, 22, 18, 17, 14, 11, 10, 12, 13, 14, 12, 12, 10, 7, 0, 0, 0, 0, 3, 6, 12, 12, 15, 19, 17, 18, 18, 19, 18, 21, 20, 21, 21, 22},
-  {25, 28, 32, 34, 37, 40, 43, 45, 46, 48, 49, 49, 49, 47, 46, 43, 43, 42, 41, 40, 39, 36, 33, 29, 24, 21, 19, 17, 14, 12, 11, 8, 6, 4, 2, 2, 0, 1, 2, 3, 4, 6, 6, 7, 9, 11, 12, 15, 19, 21},
-  {25, 28, 30, 31, 32, 34, 35, 37, 38, 41, 43, 45, 48, 49, 47, 47, 46, 44, 40, 38, 36, 33, 32, 30, 28, 26, 25, 23, 22, 20, 18, 16, 14, 13, 13, 11, 11, 10, 9, 7, 6, 6, 6, 6, 7, 10, 13, 15, 18, 22},
-  {25, 28, 31, 37, 40, 42, 45, 46, 47, 48, 49, 48, 48, 48, 46, 44, 43, 39, 37, 36, 35, 33, 33, 30, 28, 26, 21, 16, 14, 11, 6, 4, 3, 2, 1, 0, 0, 1, 2, 2, 4, 7, 9, 11, 14, 14, 15, 18, 18, 20},
-  {25, 29, 33, 35, 38, 42, 44, 45, 45, 45, 44, 44, 46, 46, 47, 49, 49, 48, 46, 42, 37, 33, 29, 26, 23, 20, 18, 17, 16, 14, 14, 12, 12, 11, 11, 10, 8, 6, 5, 4, 5, 5, 8, 10, 12, 12, 14, 17, 19, 21},
-  {25, 35, 40, 39, 41, 38, 30, 30, 30, 34, 31, 34, 35, 38, 38, 38, 41, 39, 48, 49, 46, 42, 32, 30, 28, 19, 14, 9, 11, 18, 23, 26, 18, 11, 6, 9, 10, 13, 15, 11, 12, 15, 14, 12, 4, 5, 4, 7, 9, 16}
-};
-
-char *wavenames[18] = {"akwf1","akwf2","akwf3","akwf4","akwf5","akwf6","akwf7","akwf8","akwf9","akwf10","akwf11","akwf12","akwf13","akwf14","akwf15","akwf16","akwf17","akwf18"};
 
 // audio buffers
 static uint8_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
@@ -78,16 +69,11 @@ float global_tempo = 100;
 
 uint32_t prevTick = 0;
 
-uint16_t *varToUpdate;
-
 float f_bufPost_mixdown_left[1024];
 float f_bufPost_mixdown_right[1024];
 
-float voice_frequency[4] = {0,0,0,0};
-
 float f_ssample[4][600];
 uint8_t active_ssample = 1;
-uint8_t receiving_note_on = 0;
 // max 32 cycle = 32*600 = 19200
 float f_ssample_freq_specific[19200];
 float f_ssample_outChannel[4][600];
@@ -106,16 +92,6 @@ extern HCD_HandleTypeDef hhcd;
 extern USBH_HandleTypeDef hUSBH;
 extern SAI_HandleTypeDef haudio_out_sai;
 
-UART_HandleTypeDef uart_config;
-
-uint8_t midicounter=0;
-uint16_t mididata[10];
-uint8_t rx_byte[1];
-
-uint16_t vco1wave = 0;
-uint16_t vco2wave = 1;
-uint16_t vco3wave = 2;
-
 FIL audio_file[4];
 FIL ssample[4];
 UINT bytes_read[4];
@@ -132,16 +108,13 @@ static TS_StateTypeDef rawTouchState;
 
 uint16_t runOnce = 0;
 
-char *touchMap = "main";
-
-void drawSSample(uint16_t sampleID, uint16_t xstart, uint16_t ystart);
-void UART6_Config();
+float getBPM(FIL *audio_file);
 static void init_after_USB();
 void drawInterface();
-void drawWaveSelector();
 static void initAudio();
+static void stop_playback();
 void computeAudio();
-void computeVoice(int16_t freq, uint8_t voiceID);
+void computeVoice(int16_t freq);
 void computeOscillatorOut(uint8_t ssampleBufferID, uint8_t channelID, uint16_t samplesPerTransfer);
 void inter1parray( float aaaa[], int n, float bbbb[], int m );
 void interp2array( float aaaa[], int n, float bbbb[], int m );
@@ -152,33 +125,69 @@ int main() {
   HAL_Init();
   SystemClock_Config(); 
   
-  // config UART for MIDI communication
-  UART6_Config();
-  
+  BSP_LCD_Init();
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Off(LED_GREEN);
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
   
-  // Init LCD and Touchscreen
-  BSP_LCD_Init();
+  __GPIOC_CLK_ENABLE();
+  __USART6_CLK_ENABLE();
+  __DMA2_CLK_ENABLE();
+
+  GPIO_InitTypeDef GPIO_InitStruct;
+
+  GPIO_InitStruct.Pin = TXPIN | RXPIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF8_USART6;
+  HAL_GPIO_Init(DATAPORT, &GPIO_InitStruct);
+  
+
+
+  huart1.Instance = USART6;
+  huart1.Init.BaudRate = BAUDRATE;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_8;
+  HAL_UART_Init(&huart1);
+  
+  hdma_usart1_rx.Instance = DMA2_Stream2;
+  hdma_usart1_rx.Init.Channel = DMA_CHANNEL_4;
+  hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+  hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+  hdma_usart1_rx.Init.MemInc = DMA_MINC_DISABLE;
+  hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
+  hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  HAL_DMA_Init(&hdma_usart1_rx);
+
+  __HAL_LINKDMA(&huart1, hdmarx, hdma_usart1_rx);
+
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, UART_PRIORITY, UART_RX_SUBPRIORITY);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
+  
+  __HAL_UART_FLUSH_DRREGISTER(&huart1);
+  HAL_UART_Receive_DMA(&huart1, &rxBuffer, 1);
+  
+  //Init LCD and Touchscreen
   if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
-    BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
-    // BSP_LCD_LayerDefaultInit(1, LCD_FB_START_ADDRESS+(BSP_LCD_GetXSize()*BSP_LCD_GetYSize()*4));
-    // BSP_LCD_SelectLayer(1);
-    // BSP_LCD_Clear(LCD_COLOR_TRANSPARENT);
-    // BSP_LCD_SetTransparency(1, 100);
-    // BSP_LCD_SelectLayer(0);
-    // BSP_LCD_Clear(LCD_COLOR_BLACK);
-    // BSP_LCD_SetLayerVisible(0,ENABLE);
-    // BSP_LCD_SetLayerVisible(1,DISABLE);
-	  BSP_TS_ITConfig();
-  }  
+    BSP_LCD_LayerDefaultInit(1, SDRAM_DEVICE_ADDR);
+    BSP_LCD_SelectLayer(1);
+    BSP_TS_ITConfig();
+  }
 
   // Load SD Driver & mount card
   if (FATFS_LinkDriver(&SD_Driver, usb_drive_path) != 0) {
     BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"SD Driver error", CENTER_MODE);
     Error_Handler();
   }
+  
 	if(f_mount(&SDFatFs, (TCHAR const*)usb_drive_path, 0) != FR_OK) {
     BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"SD Mount error", CENTER_MODE);
 		Error_Handler();
@@ -195,42 +204,51 @@ int main() {
   return 0;
 }
 
-// MIDI HANDLING --------------------------------------------
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
+void DMA2_Stream2_IRQHandler(void)
 {
-  BSP_LED_Toggle(LED_GREEN);
-
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                          (uint8_t *)"MIDI in", CENTER_MODE);
-    
-  if(midicounter==2) {
-    mididata[midicounter]=rx_byte[0];
-    char a[] = "";
-    sprintf(a, "%d %d %d", mididata[0],mididata[1],mididata[2]);
-    BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 + 20, (uint8_t *)a, CENTER_MODE);
-    midicounter=0;
-  }
-  
-  if(midicounter==1) {
-    mididata[midicounter]=rx_byte[0];
-    midicounter++;
-  }
-                            
-  // received 144: start receiving note_on (3 bytes)
-  // e.g. 144 56 40
-  if(rx_byte[0]==144 && midicounter==0) {
-    //receiving_note_on = 1;
-    mididata[midicounter]=rx_byte[0];
-    midicounter++;
-  }  
-
-  // reset interrupt
-  HAL_UART_Receive_IT(&uart_config, rx_byte, 1);
+    HAL_NVIC_ClearPendingIRQ(DMA2_Stream2_IRQn);
+    HAL_DMA_IRQHandler(&hdma_usart1_rx);
+    BSP_LED_Toggle(LED_GREEN);
 }
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    __HAL_UART_FLUSH_DRREGISTER(&huart1); // Clear the buffer to prevent overrun
 
+    int i = 0;
+    
+    BSP_LED_Toggle(LED_GREEN);
+
+    //print(&rxBuffer); // Echo the character that caused this callback so the user can see what they are typing
+    
+
+    if (rxBuffer == 8 || rxBuffer == 127) // If Backspace or del
+    {
+        //print(" \b"); // "\b space \b" clears the terminal character. Remember we just echoced a \b so don't need another one here, just space and \b
+        rxindex--; 
+        if (rxindex < 0) rxindex = 0;
+    }
+
+    else if (rxBuffer == '\n' || rxBuffer == '\r') // If Enter
+    {
+        //executeSerialCommand(rxString);
+        rxString[rxindex] = 0;
+        rxindex = 0;
+        for (i = 0; i < MAXCLISTRING; i++) rxString[i] = 0; // Clear the string buffer
+    }
+
+    else
+    {
+        rxString[rxindex] = rxBuffer; // Add that character to the string
+        rxindex++;
+        if (rxindex > MAXCLISTRING) // User typing too much, we can't have commands that big
+        {
+            rxindex = 0;
+            for (i = 0; i < MAXCLISTRING; i++) rxString[i] = 0; // Clear the string buffer
+            //print("\r\nConsole> ");
+        }
+    }
+}
 
 static void init_after_USB() {
   // open samples
@@ -269,13 +287,12 @@ static void init_after_USB() {
 	for (int j=0; j < 1200; j=j+2) {
 	
 		// to short
-    // read 2 values for 2's-complement
-    // convert to 1 short value
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+		short lefty = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+		//short righty = (short)((audioBufferFile[i][j+3])<<8 | ((audioBufferFile[i][j+2]) & 0xFF));
 	
 		// to float
-    // use j/2 because of conversion from 2's comp to short
-		f_ssample[0][j/2] = ((float)tempshort/32768);
+		f_ssample[0][j/2] = ((float)lefty/32768);
+		//f_ssample[0][j/4] = ((float)righty/32768);
   }
   
   // 2
@@ -288,8 +305,8 @@ static void init_after_USB() {
   }
   f_read(&ssample[1], audioBufferFile[0], 1200, &bytes_read[0]);
 	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[1][j/2] = ((float)tempshort/32768);
+		short lefty = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+		f_ssample[1][j/2] = ((float)lefty/32768);
   }
   
   // 3
@@ -302,8 +319,8 @@ static void init_after_USB() {
   }
   f_read(&ssample[2], audioBufferFile[0], 1200, &bytes_read[0]);
 	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[2][j/2] = ((float)tempshort/32768);
+		short lefty = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+		f_ssample[2][j/2] = ((float)lefty/32768);
   }
   
   
@@ -317,11 +334,29 @@ static void init_after_USB() {
   }
   f_read(&ssample[3], audioBufferFile[0], 1200, &bytes_read[0]);
 	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[3][j/2] = ((float)tempshort/32768);
+		short lefty = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+		f_ssample[3][j/2] = ((float)lefty/32768);
   }
   
+  
+	
+	float bpm = getBPM(&audio_file[1]);
+	char a[] = "";
+	snprintf(a, 6, "%f",bpm);
+    BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)a, CENTER_MODE);
+  
   initAudio();
+}
+
+float getBPM(FIL *audio_file) {
+	uint32_t filesz = f_size(&audio_file[0]);
+	uint8_t nbrbeats = 8;
+	// filesize / 44100 (samplerate) / 2 (channels) / 2 (16 bits = 2 bytes per channel)
+	// this gives playtime in seconds
+	// then divide by nbrofbeats to get time per beat in seconds
+	// then divide 60 through the time per beat -> BPM
+	float bpm = 60 / (((float)filesz / 44100 / 2 / 2) / nbrbeats); 
+	return bpm;
 }
 
 static void initAudio() {
@@ -331,6 +366,10 @@ static void initAudio() {
     BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
     BSP_AUDIO_OUT_SetVolume(VOLUME);
     BSP_AUDIO_OUT_Play((uint16_t *)audioOutBuf, AUDIO_DMA_BUFFER_SIZE);
+}
+
+static void stop_playback() {
+  BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
 }
 
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
@@ -356,13 +395,7 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 
 void computeAudio() {
   
-  for(int k=0; k<4; k++){
-    if (voice_frequency[k]!=0) {
-      // play voice
-      computeVoice(voice_frequency[k], k);
-    }
-  }
-  //computeVoice(440);
+  computeVoice(400);
   
 	// the mix
 	// float to short
@@ -398,14 +431,12 @@ void computeAudio() {
 	}
 }
 
-void computeVoice(int16_t freq, uint8_t voiceID) {
+void computeVoice(int16_t freq) {
   //compute oscillator outputs for note
-  // required frequency * 3.2 outputs samples per Transfer
-  
-  computeOscillatorOut(voiceID, voiceID, freq); // 109.4 Hz
-  //computeOscillatorOut(1,1, 4000); //1250 Hz
-  //computeOscillatorOut(2,2, 449); // 140.3 Hz
-  //computeOscillatorOut(3,3, 1408); // 1562.1 Hz
+  computeOscillatorOut(0,0, 350);
+  computeOscillatorOut(1,1, 4000);
+  computeOscillatorOut(2,2, 449);
+  computeOscillatorOut(3,3, 5000);
 }
 
 
@@ -515,77 +546,11 @@ void drawButton(uint16_t x, uint16_t y, uint8_t * textstring) {
 
 void drawInterface() {
   BSP_LCD_Clear(LCD_COLOR_BLUE);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
-  BSP_LCD_FillRect(0,0,480,24);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-  BSP_LCD_SetFont(&Font16);
-  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"OCTAPAL", LEFT_MODE);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(5, 60, (uint8_t *)"vco1", LEFT_MODE);
-  BSP_LCD_DisplayStringAt(5, 140, (uint8_t *)"vco2", LEFT_MODE);
-  BSP_LCD_DisplayStringAt(5, 220, (uint8_t *)"vco3", LEFT_MODE);
-  
-  drawSSample(vco1wave,40,35);
-  drawSSample(vco2wave,40,115);
-  drawSSample(vco3wave,40,195);
-  
-  //BSP_LCD_DrawPolygon(wave1,50);
     
-  //drawButton(10,29,(uint8_t *)"1");
-  //drawButton(125,29,(uint8_t *)"2");
-  //drawButton(240,29,(uint8_t *)"3");
-  //drawButton(355,29,(uint8_t *)"4");
-}
-
-void drawWaveSelector() {  
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_FillRect(10,10,460,257);
-  BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
-  BSP_LCD_FillRect(12,12,456,253);
-  BSP_LCD_SetTextColor(LCD_COLOR_RED);
-  BSP_LCD_FillRect(12,12,456,20);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_RED);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(17, 17, (uint8_t *)"Select wave", LEFT_MODE);
-  
-  // 18 waves available sofar
-  int8_t sid = 0;
-  for (int row=0; row < 3; row++) {
-    for (int col=0; col < 6; col++) {
-      drawSSample(sid, 20 + col * 70 , 40 + 75 * row );
-      sid++;
-    }
-  }
-}
-
-void drawSSample(uint16_t sampleID, uint16_t xstart, uint16_t ystart) {
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
-  BSP_LCD_FillRect(xstart,ystart,60,60);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
-  BSP_LCD_DrawLine(xstart,ystart+30,xstart+59,ystart+30);
-  
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  uint16_t y = ystart + 50 - sswave[sampleID][0];
-  uint16_t x = xstart + 5;
-  for (int j=1; j < 50; j++) {
-    BSP_LCD_DrawLine(x,y,x+1,ystart + 5 + 50 - sswave[sampleID][j]);
-    x++;
-    y = ystart + 5 + 50 - sswave[sampleID][j];
-  }
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_BLUE);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(xstart, ystart+60, (uint8_t *)wavenames[sampleID], LEFT_MODE);
+  drawButton(10,5,(uint8_t *)"1");
+  drawButton(125,5,(uint8_t *)"2");
+  drawButton(240,5,(uint8_t *)"3");
+  drawButton(355,5,(uint8_t *)"4");
 }
 
 // void HAL_GPIO_EXTI_IRQHandler points to this:
@@ -603,57 +568,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			
 			uint16_t touchx = rawTouchState.touchX[0];
       uint16_t touchy = rawTouchState.touchY[0];
-      
-      // determine and handle current touchMap
-      if (strcmp(touchMap,"main")==0) {
-        // vco1 select
-        if(touchx > 40 && touchx < 100 && touchy > 35 && touchy < 95) {
-          touchMap = "waveselect";
-          varToUpdate = &vco1wave;
-          drawWaveSelector();
-        }
-        
-        if(touchx > 40 && touchx < 100 && touchy > 115 && touchy < 175) {
-          touchMap = "waveselect";
-          varToUpdate = &vco2wave;
-          drawWaveSelector();
-        }
-        
-        if(touchx > 40 && touchx < 100 && touchy > 195 && touchy < 255) {
-          touchMap = "waveselect";
-          varToUpdate = &vco3wave;
-          drawWaveSelector();
-        }
-      }
-        
-      else if (strcmp(touchMap,"waveselect")==0) {
-        
-        int8_t sid = 0;
-        for (int row=0; row < 3; row++) {
-          for (int col=0; col < 6; col++) {
-            if(touchx > (20 + col * 70) && touchx < (80 + col * 70) && touchy > (40 + 75 * row) && touchy < (100 + 75 * row)) {
-              *varToUpdate = sid;
-            }
-            sid++;
-          }
-        }
-        
-        touchMap = "main";
-        drawInterface();
-      }
-        
-        // wave select
-        //if(touchx > 20 && touchx < 100 && touchy > 35 && touchy < 95) {
-          // update pointed to variable (vco1wave, vco2wave or vco3wave)
-          // with new waveid
-        //  *varToUpdate = 4;
-        //  touchMap = "main";
-        //  drawInterface();
-       // }
-        
-      //}
 			
-      /*
 			if(touchy > 115) {
 			
 				int16_t sum = 0;
@@ -684,16 +599,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			else {
         // restart audio based on touch positions
         if(touchx > 0 && touchx < 120) {
-          voice_frequency[0] = 1408;
           //f_lseek(&audio_file[0], 0);
-          //f_ssample_outChannel_Volume[0] += 0.1;
-          //  if(f_ssample_outChannel_Volume[0] > 0.6) {f_ssample_outChannel_Volume[0]=0;}
+          f_ssample_outChannel_Volume[0] += 0.1;
+            if(f_ssample_outChannel_Volume[0] > 0.6) {f_ssample_outChannel_Volume[0]=0;}
         }
         if(touchx > 120 && touchx < 240) {
-          voice_frequency[0] = 700;
           //f_lseek(&audio_file[1], 0);
-          //f_ssample_outChannel_Volume[1] += 0.1;
-          //  if(f_ssample_outChannel_Volume[1] > 0.6) {f_ssample_outChannel_Volume[1]=0;}
+          f_ssample_outChannel_Volume[1] += 0.1;
+            if(f_ssample_outChannel_Volume[1] > 0.6) {f_ssample_outChannel_Volume[1]=0;}
         }
         if(touchx > 240 && touchx < 360) {
           f_ssample_outChannel_Volume[2] += 0.1;
@@ -707,58 +620,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         //  f_lseek(&audio_file[1], 0);
         //}
 
-      }*/
+      }
 			
 			runOnce = 1;
 		}
 	// read state and continue with while
 	BSP_TS_GetState(&rawTouchState);
 	} // end while
-}
-
-
-
-
-
-void UART6_Config() {
-  
-//************  UART CONFIG  *****************************//
-
-  __USART6_CLK_ENABLE();
-
-  uart_config.Instance=USART6;
-
-  uart_config.Init.BaudRate=31250;
-  uart_config.Init.WordLength=UART_WORDLENGTH_8B;
-  uart_config.Init.StopBits=UART_STOPBITS_1;
-  uart_config.Init.Parity=UART_PARITY_NONE;
-  uart_config.Init.Mode=UART_MODE_TX_RX;
-  uart_config.Init.HwFlowCtl=UART_HWCONTROL_NONE;
-  
-  HAL_UART_Init(&uart_config);
-
-  HAL_NVIC_SetPriority(USART6_IRQn,0,1);
-  HAL_NVIC_EnableIRQ(USART6_IRQn);
-
-//**********************************************************//
-
-//************ UART GPIO CONFIG  *********************//
-
-  GPIO_InitTypeDef uart_gpio;
-
-  __GPIOC_CLK_ENABLE();
-
-  uart_gpio.Pin=GPIO_PIN_7;
-  uart_gpio.Mode=GPIO_MODE_AF_PP;
-  uart_gpio.Pull=GPIO_NOPULL;
-  uart_gpio.Speed=GPIO_SPEED_FAST;
-  uart_gpio.Alternate=GPIO_AF8_USART6;
-
-  HAL_GPIO_Init(GPIOC, &uart_gpio);
-  HAL_UART_Receive_IT(&uart_config, rx_byte, 1);
-}
-
-void USART6_IRQHandler(void)
-{
-  HAL_UART_IRQHandler(&uart_config);
 }

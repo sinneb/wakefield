@@ -1,6 +1,6 @@
 /*
 
-Interpolate functions for 4spoor
+Interpolate functions for octapal
 
 */
 
