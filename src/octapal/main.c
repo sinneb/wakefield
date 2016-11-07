@@ -40,45 +40,46 @@ char *audioFilename[4] = {"0:sound.wav", "0:sound2.wav", "0:sound3.wav", "0:soun
 
 // waves
 uint8_t sswave[100][50] = {
-  {24, 28, 31, 34, 37, 39, 42, 44, 46, 47, 48, 49, 49, 49, 49, 48, 47, 46, 44, 42, 39, 37, 34, 31, 28, 24, 21, 18, 15, 12, 10, 7, 5, 3, 2, 1, 0, 0, 0, 0, 1, 2, 3, 5, 7, 10, 12, 15, 18, 21},
-  {34, 49, 46, 45, 44, 41, 40, 38, 34, 34, 30, 26, 26, 23, 22, 21, 21, 20, 20, 19, 19, 18, 17, 17, 17, 17, 17, 17, 17, 17, 29, 29, 28, 27, 27, 27, 25, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17},
+  {24, 23, 22, 21, 16, 10, 9, 11, 13, 15, 15, 12, 9, 7, 6, 6, 7, 8, 9, 11, 13, 15, 17, 19, 21, 22, 24, 26, 27, 29, 33, 37, 40, 42, 44, 45, 46, 46, 45, 44, 42, 40, 38, 36, 34, 33, 31, 29, 27, 26},
+  {26, 43, 44, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 23, 6, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4},
+  {24, 7, 6, 7, 8, 8, 9, 10, 11, 12, 12, 13, 14, 15, 16, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24, 24, 25, 26, 27, 28, 28, 29, 30, 31, 32, 32, 33, 34, 35, 36, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44},
+  {25, 27, 30, 32, 35, 37, 39, 40, 42, 43, 43, 43, 43, 43, 42, 40, 39, 37, 35, 33, 31, 28, 26, 24, 22, 20, 18, 16, 15, 14, 13, 13, 12, 12, 13, 14, 10, 9, 10, 10, 10, 10, 11, 12, 13, 14, 16, 18, 20, 22},
+  {25, 27, 30, 32, 35, 37, 39, 41, 42, 43, 44, 45, 45, 45, 44, 44, 42, 41, 39, 37, 35, 33, 30, 27, 25, 22, 20, 17, 15, 13, 11, 10, 9, 8, 8, 7, 8, 6, 5, 6, 7, 8, 8, 10, 11, 13, 15, 17, 20, 22},
+  {25, 28, 31, 34, 37, 40, 43, 45, 47, 48, 49, 49, 49, 48, 47, 45, 43, 40, 37, 34, 31, 27, 24, 21, 18, 16, 14, 12, 10, 9, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 10, 10, 10, 11, 12, 13, 15, 17, 19, 22},
+  {24, 22, 19, 16, 14, 11, 10, 8, 7, 6, 6, 6, 6, 3, 4, 5, 6, 7, 8, 10, 12, 14, 17, 19, 22, 24, 27, 30, 32, 35, 37, 39, 40, 41, 42, 43, 43, 46, 45, 45, 44, 44, 43, 41, 40, 38, 35, 33, 30, 27},
+  {25, 28, 31, 34, 37, 39, 42, 44, 46, 47, 48, 49, 49, 49, 49, 48, 47, 45, 43, 41, 38, 36, 33, 30, 28, 24, 21, 18, 15, 12, 10, 7, 5, 3, 2, 1, 0, 0, 0, 0, 1, 2, 4, 6, 8, 11, 13, 16, 19, 21},
+  {25, 27, 29, 32, 34, 36, 38, 39, 41, 42, 43, 44, 45, 45, 46, 45, 45, 43, 42, 40, 37, 35, 32, 30, 27, 24, 22, 19, 17, 15, 13, 11, 10, 8, 7, 6, 5, 4, 4, 3, 4, 4, 6, 7, 9, 12, 14, 17, 19, 22},
   {25, 27, 27, 27, 27, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 26, 26, 26, 27, 33, 24, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 22, 22, 22, 22, 22, 23, 23, 23, 22, 16},
-  {25, 25, 25, 26, 26, 27, 27, 28, 29, 30, 30, 31, 32, 33, 34, 34, 34, 33, 33, 33, 33, 32, 32, 32, 32, 31, 31, 31, 30, 22, 7, 0, 2, 10, 12, 14, 15, 16, 17, 18, 19, 19, 20, 21, 21, 22, 23, 23, 24, 24},
-  {25, 26, 29, 32, 35, 41, 46, 49, 49, 48, 46, 45, 43, 42, 41, 39, 38, 37, 36, 35, 34, 33, 31, 28, 24, 19, 11, 5, 1, 0, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21, 23},
-  {25, 48, 49, 44, 37, 34, 31, 30, 31, 30, 24, 15, 11, 13, 18, 22, 24, 24, 25, 26, 28, 31, 33, 27, 24, 24, 32, 28, 24, 24, 24, 24, 23, 18, 17, 12, 10, 11, 13, 18, 16, 19, 21, 22, 27, 27, 22, 20, 18, 20},
-  {25, 33, 36, 36, 36, 37, 38, 49, 49, 47, 40, 34, 31, 29, 29, 29, 26, 17, 12, 11, 15, 20, 22, 21, 17, 15, 14, 15, 17, 17, 13, 11, 13, 17, 16, 17, 22, 28, 32, 34, 32, 30, 26, 23, 20, 18, 16, 12, 14, 19},
-  {25, 27, 31, 36, 41, 45, 48, 49, 48, 47, 48, 47, 46, 42, 39, 35, 33, 33, 33, 32, 29, 27, 26, 25, 23, 20, 16, 12, 7, 3, 1, 0, 0, 0, 1, 4, 8, 11, 14, 17, 20, 21, 20, 20, 19, 17, 16, 19, 22, 23},
-  {25, 32, 39, 45, 49, 49, 48, 44, 39, 32, 27, 24, 24, 26, 26, 25, 22, 22, 22, 28, 32, 35, 31, 23, 16, 10, 6, 4, 2, 1, 2, 5, 13, 23, 30, 33, 34, 33, 32, 34, 31, 30, 26, 20, 13, 11, 9, 8, 11, 17},
-  {24, 27, 30, 32, 33, 35, 37, 38, 40, 41, 42, 43, 43, 44, 44, 45, 44, 44, 42, 42, 40, 39, 37, 35, 32, 29, 26, 23, 20, 17, 14, 11, 8, 6, 3, 2, 0, 0, 0, 0, 1, 2, 3, 5, 8, 11, 13, 16, 19, 22},
-  {25, 28, 30, 30, 31, 33, 35, 34, 32, 30, 30, 32, 35, 37, 39, 39, 40, 36, 32, 29, 27, 23, 19, 19, 17, 15, 12, 9, 10, 9, 6, 5, 6, 8, 10, 10, 8, 4, 3, 1, 0, 0, 3, 8, 10, 13, 17, 20, 21, 23},
-  {25, 31, 37, 42, 47, 49, 48, 46, 44, 39, 36, 37, 38, 36, 37, 40, 40, 37, 30, 24, 16, 10, 7, 8, 10, 12, 17, 21, 20, 16, 15, 13, 8, 5, 4, 3, 7, 12, 15, 18, 18, 19, 20, 15, 9, 6, 6, 7, 15, 20},
-  {24, 25, 26, 28, 22, 22, 19, 23, 25, 24, 25, 31, 33, 30, 29, 29, 26, 22, 18, 17, 14, 11, 10, 12, 13, 14, 12, 12, 10, 7, 0, 0, 0, 0, 3, 6, 12, 12, 15, 19, 17, 18, 18, 19, 18, 21, 20, 21, 21, 22},
-  {25, 28, 32, 34, 37, 40, 43, 45, 46, 48, 49, 49, 49, 47, 46, 43, 43, 42, 41, 40, 39, 36, 33, 29, 24, 21, 19, 17, 14, 12, 11, 8, 6, 4, 2, 2, 0, 1, 2, 3, 4, 6, 6, 7, 9, 11, 12, 15, 19, 21},
-  {25, 28, 30, 31, 32, 34, 35, 37, 38, 41, 43, 45, 48, 49, 47, 47, 46, 44, 40, 38, 36, 33, 32, 30, 28, 26, 25, 23, 22, 20, 18, 16, 14, 13, 13, 11, 11, 10, 9, 7, 6, 6, 6, 6, 7, 10, 13, 15, 18, 22},
-  {25, 28, 31, 37, 40, 42, 45, 46, 47, 48, 49, 48, 48, 48, 46, 44, 43, 39, 37, 36, 35, 33, 33, 30, 28, 26, 21, 16, 14, 11, 6, 4, 3, 2, 1, 0, 0, 1, 2, 2, 4, 7, 9, 11, 14, 14, 15, 18, 18, 20},
-  {25, 29, 33, 35, 38, 42, 44, 45, 45, 45, 44, 44, 46, 46, 47, 49, 49, 48, 46, 42, 37, 33, 29, 26, 23, 20, 18, 17, 16, 14, 14, 12, 12, 11, 11, 10, 8, 6, 5, 4, 5, 5, 8, 10, 12, 12, 14, 17, 19, 21},
-  {25, 35, 40, 39, 41, 38, 30, 30, 30, 34, 31, 34, 35, 38, 38, 38, 41, 39, 48, 49, 46, 42, 32, 30, 28, 19, 14, 9, 11, 18, 23, 26, 18, 11, 6, 9, 10, 13, 15, 11, 12, 15, 14, 12, 4, 5, 4, 7, 9, 16}
+  {24, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 25, 43, 48, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49},
+  {27, 44, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 22, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {25, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 44, 45, 46, 17, 6, 4, 5, 6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+  {24, 15, 12, 12, 14, 16, 16, 16, 17, 20, 23, 25, 17, 8, 4, 3, 5, 7, 8, 7, 8, 10, 13, 16, 20, 23, 27, 30, 34, 37, 40, 40, 40, 41, 44, 47, 49, 41, 32, 28, 27, 29, 32, 32, 32, 32, 34, 37, 41, 36},
+  {24, 18, 12, 9, 13, 17, 19, 17, 12, 8, 7, 9, 9, 8, 2, 4, 10, 18, 33, 34, 33, 29, 24, 27, 28, 26, 22, 20, 21, 26, 33, 37, 36, 33, 29, 29, 31, 32, 30, 27, 27, 30, 35, 49, 48, 44, 38, 33, 31, 29},
+  {25, 36, 42, 42, 37, 38, 41, 39, 25, 15, 10, 19, 33, 40, 44, 46, 46, 46, 47, 47, 47, 46, 45, 46, 47, 48, 49, 49, 49, 48, 48, 47, 36, 20, 11, 6, 3, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 7},
+  {25, 31, 37, 42, 45, 48, 48, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 48, 47, 46, 45, 42, 37, 31, 24, 18, 12, 7, 4, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 3, 4, 7, 12, 18},
+  {25, 33, 38, 41, 44, 46, 47, 48, 49, 49, 49, 49, 49, 49, 49, 48, 48, 47, 46, 46, 45, 44, 44, 43, 43, 42, 42, 42, 41, 41, 40, 40, 36, 20, 10, 6, 5, 4, 4, 4, 4, 5, 5, 6, 7, 8, 9, 11, 13, 16}
 };
 
-char *wavenames[18] = {"akwf1","akwf2","akwf3","akwf4","akwf5","akwf6","akwf7","akwf8","akwf9","akwf10","akwf11","akwf12","akwf13","akwf14","akwf15","akwf16","akwf17","akwf18"};
+char *wavenames[18] = {"0101","0102","0103","0104","0105","0106","0107","0108","0109","0110","0111","0112","0113","0114","0115","0116","0117","0118"};
 
 // audio buffers
 static uint8_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioOutBuf[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioBufferFile[4][AUDIO_DMA_BUFFER_SIZE];
-float f_bufPre_left[4][1024];
-float f_bufPost_left[4][1024];
-float f_bufPre_right[4][1024];
-float f_bufPost_right[4][1024];
+//float f_bufPre_left[4][1024];
+//float f_bufPost_left[4][1024];
+//float f_bufPre_right[4][1024];
+//float f_bufPost_right[4][1024];
 
-uint16_t taptempo[4];
-uint8_t taptempocounter;
-uint32_t taptempo_prev = 0;
-float global_tempo = 100;
+//uint16_t taptempo[4];
+//uint8_t taptempocounter;
+//uint32_t taptempo_prev = 0;
+//float global_tempo = 100;
 
 uint32_t prevTick = 0;
 
 uint16_t *varToUpdate;
+uint16_t waveformToUpdate;
 
 float f_bufPost_mixdown_left[1024];
 float f_bufPost_mixdown_right[1024];
@@ -91,7 +92,7 @@ uint8_t receiving_note_on = 0;
 // max 32 cycle = 32*600 = 19200
 float f_ssample_freq_specific[19200];
 float f_ssample_outChannel[4][600];
-float f_ssample_outChannel_Volume[4] = {0.6, 0.6, 0.6, 0.6};
+float f_ssample_outChannel_Volume[4] = {0.3, 0.3, 0.3, 0.3};
 float f_ssample_temp[600];
 float f_ssample_right[600];
 uint16_t ssample_lastpos = 0;
@@ -141,11 +142,12 @@ void drawInterface();
 void drawWaveSelector();
 static void initAudio();
 void computeAudio();
-void computeVoice(int16_t freq, uint8_t voiceID);
+void computeVoice(float freq, uint8_t voiceID);
 void computeOscillatorOut(uint8_t ssampleBufferID, uint8_t channelID, uint16_t samplesPerTransfer);
 void inter1parray( float aaaa[], int n, float bbbb[], int m );
 void interp2array( float aaaa[], int n, float bbbb[], int m );
 void interp5( float aaaa[], int n, float bbbbb[], int m );
+void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID);
 
 int main() {
   CPU_CACHE_Enable();
@@ -188,6 +190,8 @@ int main() {
   
   drawInterface();
   
+  voice_frequency[0] = 440;
+  
   while (1) {		
 	  //nothing is done here	
   }
@@ -201,9 +205,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
   BSP_LED_Toggle(LED_GREEN);
 
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                          (uint8_t *)"MIDI in", CENTER_MODE);
+  //BSP_LCD_SetFont(&Font12);
+  //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
+  //                        (uint8_t *)"MIDI in", CENTER_MODE);
     
   if(midicounter==2) {
     mididata[midicounter]=rx_byte[0];
@@ -211,6 +215,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
     sprintf(a, "%d %d %d", mididata[0],mididata[1],mididata[2]);
     BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 + 20, (uint8_t *)a, CENTER_MODE);
     midicounter=0;
+    
+    if(mididata[0] == 144) {
+      float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
+      char b[10];
+      int dingus = req_freq * 1000;
+      //sprintf(b, "%f",req_freq);
+      //sprintf(b, "bla%g", req_freq );
+      snprintf(b, 10, "%d",dingus);
+       BSP_LCD_SetFont(&Font24);
+       BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+       BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"         ", CENTER_MODE);
+       BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)b, CENTER_MODE);
+     
+       voice_frequency[0] = req_freq;
+     };
+     
+     if(mididata[0] == 176) {
+       if(mididata[1]==71) {
+         f_ssample_outChannel_Volume[0] = mididata[2]/127.0;
+       }
+       if(mididata[1]==72) {
+         f_ssample_outChannel_Volume[1] = mididata[2]/127.0;
+       }
+       if(mididata[1]==73) {
+         f_ssample_outChannel_Volume[2] = mididata[2]/127.0;
+       }
+     }
   }
   
   if(midicounter==1) {
@@ -220,7 +251,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
                             
   // received 144: start receiving note_on (3 bytes)
   // e.g. 144 56 40
-  if(rx_byte[0]==144 && midicounter==0) {
+  if((rx_byte[0]==144 || rx_byte[0]==176)  && midicounter==0) {
     //receiving_note_on = 1;
     mididata[midicounter]=rx_byte[0];
     midicounter++;
@@ -233,93 +264,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 
 
 static void init_after_USB() {
-  // open samples
-  for (int j=0; j < 4; j++) {
-    if (f_open(&audio_file[j], audioFilename[j], FA_READ) == FR_OK) {
-		// f_open ok
-      f_lseek(&audio_file[j], f_size(&audio_file[j]));
-    } else {
-        BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                                (uint8_t *)"Load error", CENTER_MODE);
-      Error_Handler();
-    }
-  }
   
-  // open single waveform
-  // skip 44 (offset)
-  // read 1200 (samplelength = 600 2's complement)
-  if (f_open(&ssample[0], "0:single1.wav", FA_READ) == FR_OK) {
-	// f_open ok
-    f_lseek(&ssample[0], 44);
-		//char a[] = "";
-		//sprintf(a, "%ld", f_size(&ssample));
-    //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)a, CENTER_MODE);
-  } else {
-      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                              (uint8_t *)"Load error ssample", CENTER_MODE);
-    Error_Handler();
-  }
-  
-	// read chunks from USB
-  // single use of audiobuffer 0, will be reused in context later on
-  // single use of bytes_read 0
-	f_read(&ssample[0], audioBufferFile[0], 1200, &bytes_read[0]);
-
-	// 2's-complement signed integers -> short (-32k -> +32k) -> float (-1 -> +1)
-	for (int j=0; j < 1200; j=j+2) {
-	
-		// to short
-    // read 2 values for 2's-complement
-    // convert to 1 short value
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-	
-		// to float
-    // use j/2 because of conversion from 2's comp to short
-		f_ssample[0][j/2] = ((float)tempshort/32768);
-  }
-  
-  // 2
-  if (f_open(&ssample[1], "0:single2.wav", FA_READ) == FR_OK) {
-	  f_lseek(&ssample[1], 44);
-	} else {
-      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                              (uint8_t *)"Load error ssample 2", CENTER_MODE);
-    Error_Handler();
-  }
-  f_read(&ssample[1], audioBufferFile[0], 1200, &bytes_read[0]);
-	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[1][j/2] = ((float)tempshort/32768);
-  }
-  
-  // 3
-  if (f_open(&ssample[2], "0:single3.wav", FA_READ) == FR_OK) {
-	  f_lseek(&ssample[2], 44);
-	} else {
-      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                              (uint8_t *)"Load error ssample 3", CENTER_MODE);
-    Error_Handler();
-  }
-  f_read(&ssample[2], audioBufferFile[0], 1200, &bytes_read[0]);
-	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[2][j/2] = ((float)tempshort/32768);
-  }
-  
-  
-  // 4
-  if (f_open(&ssample[3], "0:single4.wav", FA_READ) == FR_OK) {
-	  f_lseek(&ssample[3], 44);
-	} else {
-      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                              (uint8_t *)"Load error ssample 4", CENTER_MODE);
-    Error_Handler();
-  }
-  f_read(&ssample[3], audioBufferFile[0], 1200, &bytes_read[0]);
-	for (int j=0; j < 1200; j=j+2) {
-		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
-		f_ssample[3][j/2] = ((float)tempshort/32768);
-  }
+  openSCwaveform(0, 2);
+  openSCwaveform(1, 3);
+  openSCwaveform(2, 3);
   
   initAudio();
 }
@@ -331,6 +279,48 @@ static void initAudio() {
     BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
     BSP_AUDIO_OUT_SetVolume(VOLUME);
     BSP_AUDIO_OUT_Play((uint16_t *)audioOutBuf, AUDIO_DMA_BUFFER_SIZE);
+}
+
+void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
+  // open single waveform
+  // skip 44 (offset)
+  // read 1200 (samplelength = 600 2's complement)
+  //char* theFilename = printf("0:single%d.wav", filenameID);
+  char theFilename[] = "";
+  sprintf(theFilename, "0:AKWF_01%02d.wav", filenameID);
+  f_close(&ssample[SCwaveformID]);
+  uint16_t openresult = f_open(&ssample[SCwaveformID], theFilename, FA_READ);
+  if ( openresult == FR_OK) {
+	// f_open ok
+    f_lseek(&ssample[SCwaveformID], 44);
+		//char a[] = "";
+		//sprintf(a, "%ld", f_size(&ssample));
+    //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)a, CENTER_MODE);
+  } else {
+		char a[] = "";
+		sprintf(a, "%d", openresult);
+      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
+                              (uint8_t *)a, CENTER_MODE);
+    Error_Handler();
+  }
+
+	// read chunks from USB
+  // single use of audiobuffer 0, will be reused in context later on
+  // single use of bytes_read 0
+	f_read(&ssample[SCwaveformID], audioBufferFile[0], 1200, &bytes_read[0]);
+
+	// 2's-complement signed integers -> short (-32k -> +32k) -> float (-1 -> +1)
+	for (int j=0; j < 1200; j=j+2) {
+
+		// to short
+    // read 2 values for 2's-complement
+    // convert to 1 short value
+		short tempshort = (short)((audioBufferFile[0][j+1])<<8 | ((audioBufferFile[0][j]) & 0xFF));
+
+		// to float
+    // use j/2 because of conversion from 2's comp to short
+		f_ssample[SCwaveformID][j/2] = ((float)tempshort/32768);
+  }
 }
 
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
@@ -398,13 +388,13 @@ void computeAudio() {
 	}
 }
 
-void computeVoice(int16_t freq, uint8_t voiceID) {
+void computeVoice(float freq, uint8_t voiceID) {
   //compute oscillator outputs for note
   // required frequency * 3.2 outputs samples per Transfer
-  
-  computeOscillatorOut(voiceID, voiceID, freq); // 109.4 Hz
-  //computeOscillatorOut(1,1, 4000); //1250 Hz
-  //computeOscillatorOut(2,2, 449); // 140.3 Hz
+  float samplesPerTrans = freq * 3.2;
+  computeOscillatorOut(0, 0, samplesPerTrans); // 109.4 Hz
+  computeOscillatorOut(1,1, samplesPerTrans/2); //1250 Hz
+  computeOscillatorOut(2,2, samplesPerTrans/4); // 140.3 Hz
   //computeOscillatorOut(3,3, 1408); // 1562.1 Hz
 }
 
@@ -610,18 +600,21 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if(touchx > 40 && touchx < 100 && touchy > 35 && touchy < 95) {
           touchMap = "waveselect";
           varToUpdate = &vco1wave;
+          waveformToUpdate = 0;
           drawWaveSelector();
         }
         
         if(touchx > 40 && touchx < 100 && touchy > 115 && touchy < 175) {
           touchMap = "waveselect";
           varToUpdate = &vco2wave;
+          waveformToUpdate = 1;
           drawWaveSelector();
         }
         
         if(touchx > 40 && touchx < 100 && touchy > 195 && touchy < 255) {
           touchMap = "waveselect";
           varToUpdate = &vco3wave;
+          waveformToUpdate = 2;
           drawWaveSelector();
         }
       }
@@ -629,17 +622,21 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       else if (strcmp(touchMap,"waveselect")==0) {
         
         int8_t sid = 0;
+        int8_t once = 0;
         for (int row=0; row < 3; row++) {
-          for (int col=0; col < 6; col++) {
-            if(touchx > (20 + col * 70) && touchx < (80 + col * 70) && touchy > (40 + 75 * row) && touchy < (100 + 75 * row)) {
-              *varToUpdate = sid;
+          for (int column=0; column < 6; column++) {
+            if(touchx > (20 + column * 70) && touchx < (80 + column * 70) && touchy > (40 + 75 * row) && touchy < (100 + 75 * row)) {
+                *varToUpdate = sid;
+                __disable_irq();
+                openSCwaveform(waveformToUpdate, sid+1);
+                __enable_irq();
+                touchMap = "main";
+                drawInterface();      
+                break;
             }
             sid++;
           }
         }
-        
-        touchMap = "main";
-        drawInterface();
       }
         
         // wave select
@@ -750,7 +747,8 @@ void UART6_Config() {
 
   uart_gpio.Pin=GPIO_PIN_7;
   uart_gpio.Mode=GPIO_MODE_AF_PP;
-  uart_gpio.Pull=GPIO_NOPULL;
+  //uart_gpio.Pull=GPIO_NOPULL;
+  uart_gpio.Pull=GPIO_PULLUP;
   uart_gpio.Speed=GPIO_SPEED_FAST;
   uart_gpio.Alternate=GPIO_AF8_USART6;
 
