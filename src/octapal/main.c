@@ -26,6 +26,17 @@ a midi controlled soundmodule
 
 #include "wavfile.h"
 
+#define TIMx TIM3
+#define TIMx_CLK_ENABLE() __HAL_RCC_TIM3_CLK_ENABLE()
+#define TIMx_IRQn TIM3_IRQn
+#define TIMx_IRQHandler TIM3_IRQHandler
+
+TIM_HandleTypeDef timer;
+static uint8_t isBlinking = 1;
+uint8_t currentStep = 1;
+
+static void initTimer(uint16_t period);
+
 uint8_t currentLCDcolor = 0;
 const uint32_t LCDColorarray[] = { LCD_COLOR_YELLOW, LCD_COLOR_GREEN, LCD_COLOR_ORANGE, LCD_COLOR_MAGENTA };
 
@@ -85,6 +96,9 @@ float f_bufPost_mixdown_left[1024];
 float f_bufPost_mixdown_right[1024];
 
 float voice_frequency[4] = {0,0,0,0};
+
+int8_t sequence[16] = {0,0,0,0,0,-1,0,-2,0,1,3,-3,2,0,4,5};
+uint8_t current_midi_note = 50;
 
 float f_ssample[4][600];
 uint8_t active_ssample = 1;
@@ -148,6 +162,8 @@ void inter1parray( float aaaa[], int n, float bbbb[], int m );
 void interp2array( float aaaa[], int n, float bbbb[], int m );
 void interp5( float aaaa[], int n, float bbbbb[], int m );
 void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID);
+void drawStepSeqTopBar(uint16_t active);
+void drawSequencer();
 
 int main() {
   CPU_CACHE_Enable();
@@ -160,6 +176,8 @@ int main() {
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Off(LED_GREEN);
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+  
+  initTimer(5000);
   
   // Init LCD and Touchscreen
   BSP_LCD_Init();
@@ -376,10 +394,13 @@ void computeAudio() {
                                     + (f_ssample_outChannel_Volume[2] * f_ssample_outChannel[2][k/4])
                                     + (f_ssample_outChannel_Volume[3] * f_ssample_outChannel[3][k/4]);
     
+    
+    
 		// to short
 		resleft[k/4] = (short)(f_bufPost_mixdown_left[k/4] * 32768);
-		resright[k/4] = (short)(f_bufPost_mixdown_right[k/4] * 32768);
-		// to 2's-comp
+		//resright[k/4] = (short)(f_bufPost_mixdown_right[k/4] * 32768);
+		resright[k/4] = resleft[k/4];
+    // to 2's-comp
 		int_bufProcessedOut[k+1] = resleft[k/4]>>8;
 		int_bufProcessedOut[k] = resleft[k/4]&0xff;
 		int_bufProcessedOut[k+3] = resright[k/4]>>8;
@@ -525,6 +546,8 @@ void drawInterface() {
   drawSSample(vco2wave,40,115);
   drawSSample(vco3wave,40,195);
   
+  drawStepSeqTopBar(0);
+  
   //BSP_LCD_DrawPolygon(wave1,50);
     
   //drawButton(10,29,(uint8_t *)"1");
@@ -533,18 +556,35 @@ void drawInterface() {
   //drawButton(355,29,(uint8_t *)"4");
 }
 
+void drawSequencer() {
+  // clear the screen, but not the topbar
+  BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+  BSP_LCD_FillRect(0,24,480,360);
+}
+
+void drawStepSeqTopBar(uint16_t active) {
+  BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+  for (int i=0; i < 16; i++) {
+    BSP_LCD_FillRect(230+(i*12),7,10,10);
+  }
+  if (active > 0) {
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_FillRect(230+((active-1)*12),7,10,10);
+  }
+}
+
 void drawWaveSelector() {  
   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_FillRect(10,10,460,257);
+  BSP_LCD_FillRect(10,30,460,237);
   BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
-  BSP_LCD_FillRect(12,12,456,253);
-  BSP_LCD_SetTextColor(LCD_COLOR_RED);
-  BSP_LCD_FillRect(12,12,456,20);
+  BSP_LCD_FillRect(12,32,456,233);
+  //BSP_LCD_SetTextColor(LCD_COLOR_RED);
+  //BSP_LCD_FillRect(12,12,456,20);
   
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_RED);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(17, 17, (uint8_t *)"Select wave", LEFT_MODE);
+  //BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+  //BSP_LCD_SetBackColor(LCD_COLOR_RED);
+  //BSP_LCD_SetFont(&Font12);
+  //BSP_LCD_DisplayStringAt(17, 17, (uint8_t *)"Select wave", LEFT_MODE);
   
   // 18 waves available sofar
   int8_t sid = 0;
@@ -616,6 +656,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           varToUpdate = &vco3wave;
           waveformToUpdate = 2;
           drawWaveSelector();
+        }
+        
+        // sequencerselect
+        if(touchx > 280 && touchx < 480 && touchy > 0 && touchy < 20) {
+          touchMap = "waveselect";
+          //varToUpdate = &vco3wave;
+          //waveformToUpdate = 2;
+          drawSequencer();
         }
       }
         
@@ -711,6 +759,66 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	// read state and continue with while
 	BSP_TS_GetState(&rawTouchState);
 	} // end while
+}
+
+
+
+// Initialize timer w/ 10kHz resolution and given period
+static void initTimer(uint16_t period) {
+  uint32_t prescaler           = (uint32_t)((SystemCoreClock / 2) / 10000) - 1;
+  timer.Instance               = TIMx;
+  timer.Init.Period            = period - 1;
+  timer.Init.Prescaler         = prescaler;
+  timer.Init.ClockDivision     = 0;
+  timer.Init.CounterMode       = TIM_COUNTERMODE_UP;
+  timer.Init.RepetitionCounter = 0;
+
+  if (HAL_TIM_Base_Init(&timer) != HAL_OK) {
+    Error_Handler();
+  }
+  if (HAL_TIM_Base_Start_IT(&timer) != HAL_OK) {
+    Error_Handler();
+  }
+}
+
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim) {
+  // TIMx Peripheral clock enable
+  TIMx_CLK_ENABLE();
+  // Set the TIMx priority
+  HAL_NVIC_SetPriority(TIMx_IRQn, 3, 0);
+  // Enable the TIMx global Interrupt
+  HAL_NVIC_EnableIRQ(TIMx_IRQn);
+}
+
+// Timer interrupt request.
+void TIMx_IRQHandler(void) {
+  HAL_TIM_IRQHandler(&timer);
+}
+
+// Callback function run whenever timer caused interrupt
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  //if (isBlinking) {
+  //  BSP_LED_Toggle(LED_GREEN);
+  //}
+  drawStepSeqTopBar(currentStep);
+  //sequence[currentStep];
+  
+  float req_freq = (13.75 * (pow(2,(current_midi_note + sequence[currentStep] -9.0)/12.0)));
+  char b[10];
+  int dingus = req_freq * 1000;
+  //sprintf(b, "%f",req_freq);
+  //sprintf(b, "bla%g", req_freq );
+  snprintf(b, 10, "%d",dingus);
+   BSP_LCD_SetFont(&Font12);
+   BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
+   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+   BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)"      ", RIGHT_MODE);
+   BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
+ 
+   voice_frequency[0] = req_freq;
+  
+  currentStep++;
+  if(currentStep>16) {currentStep=1;}
 }
 
 
