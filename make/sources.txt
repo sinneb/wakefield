@@ -37,7 +37,7 @@
 %stm32f7xx_hal_gpio.c
 # %stm32f7xx_hal_hash.c
 # %stm32f7xx_hal_hash_ex.c
-%stm32f7xx_hal_hcd.c
+# %stm32f7xx_hal_hcd.c
 %stm32f7xx_hal_i2c.c
 %stm32f7xx_hal_i2c_ex.c
 %stm32f7xx_hal_i2s.c
@@ -76,7 +76,7 @@
 # %stm32f7xx_hal_wwdg.c
 %stm32f7xx_ll_fmc.c
 %stm32f7xx_ll_sdmmc.c
-%stm32f7xx_ll_usb.c
+#%stm32f7xx_ll_usb.c
 
 # BSP
 %stm32746g_discovery.c
@@ -90,16 +90,16 @@
 %stm32746g_discovery_ts.c
 
 # USBH
-%usbh_core.c
-%usbh_ctlreq.c
-%usbh_ioreq.c
-%usbh_pipes.c
+#%usbh_core.c
+#%usbh_ctlreq.c
+#%usbh_ioreq.c
+#%usbh_pipes.c
 
 # FatFS
 %sd_diskio.c
 # %sdram_diskio.c
 # %sram_diskio.c
-%usbh_diskio.c
+#%usbh_diskio.c
 # %cc932.c
 # %cc936.c
 # %cc949.c

@@ -9,30 +9,34 @@ a midi controlled soundmodule
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> /* memset */
+#include <math.h>
 
 #include "stm32746g_discovery.h"
 #include "stm32746g_discovery_audio.h"
+#include "stm32746g_discovery_lcd.h"
+#include "stm32746g_discovery_ts.h"
 #include "stm32746g_discovery_sd.h"
 #include "stm32f7xx_hal.h"
 
 #include "ff.h"
 #include "ff_gen_drv.h"
-#include "usbh_diskio.h"
 #include "sd_diskio.h"
 
-#include "ct-gui/gui_stm32.h"
-#include "ct-head/random.h"
 #include "common/clockconfig.h"
-
-#include "wavfile.h"
 
 #define TIMx TIM3
 #define TIMx_CLK_ENABLE() __HAL_RCC_TIM3_CLK_ENABLE()
 #define TIMx_IRQn TIM3_IRQn
 #define TIMx_IRQHandler TIM3_IRQHandler
-
 TIM_HandleTypeDef timer;
-//static uint8_t isBlinking = 1;
+
+#define TIMy TIM4
+#define TIMy_CLK_ENABLE() __HAL_RCC_TIM4_CLK_ENABLE()
+#define TIMy_IRQn TIM4_IRQn
+#define TIMy_IRQHandler TIM4_IRQHandler
+TIM_HandleTypeDef timer2;
+
 uint8_t currentStep = 1;
 
 static void initTimer(uint16_t period);
@@ -40,7 +44,7 @@ static void initTimer(uint16_t period);
 uint8_t currentLCDcolor = 0;
 const uint32_t LCDColorarray[] = { LCD_COLOR_YELLOW, LCD_COLOR_GREEN, LCD_COLOR_ORANGE, LCD_COLOR_MAGENTA };
 
-#define VOLUME 60
+#define VOLUME 20
 #define SAMPLE_RATE 96000
 #define AUDIO_DMA_BUFFER_SIZE 4096
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
@@ -87,6 +91,11 @@ static uint8_t audioBufferFile[4][AUDIO_DMA_BUFFER_SIZE];
 //uint32_t taptempo_prev = 0;
 //float global_tempo = 100;
 
+// adsr timings
+float adsr_volume_multi = 1;
+float adsr[4] = {140,80,0.2,20};
+uint8_t noteOn = 0;
+
 uint32_t prevTick = 0;
 
 uint16_t *varToUpdate;
@@ -124,8 +133,6 @@ int16_t adsr_timer = 0;
 short resleft[512];
 short resright[512];
 
-extern HCD_HandleTypeDef hhcd;
-extern USBH_HandleTypeDef hUSBH;
 extern SAI_HandleTypeDef haudio_out_sai;
 
 UART_HandleTypeDef uart_config;
@@ -134,9 +141,9 @@ uint8_t midicounter=0;
 int16_t mididata[3] = {0,-1,-1};
 uint8_t rx_byte[1];
 
-uint16_t vco1wave = 0;
-uint16_t vco2wave = 1;
-uint16_t vco3wave = 2;
+uint16_t vco1wave = 1;
+uint16_t vco2wave = 2;
+uint16_t vco3wave = 3;
 
 FIL audio_file[4];
 FIL ssample[4];
@@ -158,7 +165,6 @@ char *touchMap = "main";
 
 void drawSSample(uint16_t sampleID, uint16_t xstart, uint16_t ystart);
 void UART6_Config();
-static void init_after_USB();
 void drawInterface();
 void drawWaveSelector();
 static void initAudio();
@@ -169,11 +175,12 @@ void inter1parray( float aaaa[], int n, float bbbb[], int m );
 void interp2array( float aaaa[], int n, float bbbb[], int m );
 void interp5( float aaaa[], int n, float bbbbb[], int m );
 void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID);
-void drawStepSeqTopBar(uint16_t active);
+void drawStepSeqTopBar();
 void drawSequencer();
 void drawVolumeIndicators();
 void drawVolumeControls();
 void handle_midi();
+static void initNoteOffTimer(uint16_t period);
 
 int main() {
   CPU_CACHE_Enable();
@@ -188,20 +195,13 @@ int main() {
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
   
   // init sequencer
-  initTimer(5000);
+  initTimer(20000);
+  initNoteOffTimer(10000);
   
   // Init LCD and Touchscreen
   BSP_LCD_Init();
   if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
     BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
-    // BSP_LCD_LayerDefaultInit(1, LCD_FB_START_ADDRESS+(BSP_LCD_GetXSize()*BSP_LCD_GetYSize()*4));
-    // BSP_LCD_SelectLayer(1);
-    // BSP_LCD_Clear(LCD_COLOR_TRANSPARENT);
-    // BSP_LCD_SetTransparency(1, 100);
-    // BSP_LCD_SelectLayer(0);
-    // BSP_LCD_Clear(LCD_COLOR_BLACK);
-    // BSP_LCD_SetLayerVisible(0,ENABLE);
-    // BSP_LCD_SetLayerVisible(1,DISABLE);
 	  BSP_TS_ITConfig();
   }  
 
@@ -215,7 +215,12 @@ int main() {
 		Error_Handler();
 	}
 		
-  init_after_USB();
+  // load initial waveforms in oscillators
+  openSCwaveform(0, vco1wave);
+  openSCwaveform(1, vco2wave);
+  openSCwaveform(2, vco3wave);
+  
+  initAudio();
   
   drawInterface();
   
@@ -232,20 +237,6 @@ int main() {
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
-  /*BSP_LED_Toggle(LED_GREEN);
-  
-  char a[] = "";
-  sprintf(a, "%d", rx_byte[0]);
-
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-  BSP_LCD_SetFont(&Font16);
-  BSP_LCD_DisplayStringAt(printypos, printpos, (uint8_t *)a, LEFT_MODE);
-  
-  printpos += 20;
-  if(printpos>250) {printpos=5;printypos+=40;}
-  */
-  
   // check for status (>127) or data
   if(rx_byte[0]>127) {
     mididata[0]=rx_byte[0];
@@ -274,28 +265,24 @@ void handle_midi() {
   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
   BSP_LCD_DisplayStringAt(100, 7, (uint8_t *)a, LEFT_MODE);
   
-  if(mididata[0] == 144) {
+  // note on if vel (mididata[2]) > 0
+  if(mididata[0] == 144 && mididata[2] > 0) {
     float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
+    
     char b[10];
     int dingus = req_freq * 1000;
-    //sprintf(b, "%f",req_freq);
-    //sprintf(b, "bla%g", req_freq );
-    //snprintf(b, 10, "%d",dingus);
-    // BSP_LCD_SetFont(&Font24);
-    // BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-    // BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"         ", CENTER_MODE);
-    // BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)b, CENTER_MODE);
-     
-     snprintf(b, 10, "%d",dingus);
-      BSP_LCD_SetFont(&Font12);
-      BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-      BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)"      ", RIGHT_MODE);
-      BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
+    snprintf(b, 10, "%d",dingus);
+    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)"      ", RIGHT_MODE);
+    BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
    
-     adsr_timer = 0;
-     voice_frequency[0] = req_freq;
-   };
+    // start new note
+    noteOn = 1;
+    adsr_timer = 0;
+    voice_frequency[0] = req_freq;
+   }
    
    if(mididata[0] == 176) {
      if(mididata[1]==71) {
@@ -310,75 +297,7 @@ void handle_midi() {
        f_ssample_outChannel_Volume[2] = mididata[2]/127.0;
        drawVolumeIndicators();
      }
-   }
-  
-}
-  
-  // BSP_LCD_SetFont(&Font12);
-//   char a[] = "";
-//   sprintf(a, "%d", rx_byte[0]);
-//   BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-//                           (uint8_t *)"ola", CENTER_MODE);
-    
-  /*if(midicounter==2) {
-    mididata[midicounter]=rx_byte[0];
-    char a[] = "";
-    sprintf(a, "%d %d %d", mididata[0],mididata[1],mididata[2]);
-    BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 + 20, (uint8_t *)a, CENTER_MODE);
-    midicounter=0;
-    
-    if(mididata[0] == 144) {
-      float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
-      char b[10];
-      int dingus = req_freq * 1000;
-      //sprintf(b, "%f",req_freq);
-      //sprintf(b, "bla%g", req_freq );
-      snprintf(b, 10, "%d",dingus);
-       BSP_LCD_SetFont(&Font24);
-       BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-       BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"         ", CENTER_MODE);
-       BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)b, CENTER_MODE);
-     
-       adsr_timer = 0;
-       voice_frequency[0] = req_freq;
-     };
-     
-     if(mididata[0] == 176) {
-       if(mididata[1]==71) {
-         f_ssample_outChannel_Volume[0] = mididata[2]/127.0;
-         drawVolumeIndicators();
-       }
-       if(mididata[1]==72) {
-         f_ssample_outChannel_Volume[1] = mididata[2]/127.0;
-         drawVolumeIndicators();
-       }
-       if(mididata[1]==73) {
-         f_ssample_outChannel_Volume[2] = mididata[2]/127.0;
-         drawVolumeIndicators();
-       }
-     }
-  }
-  
-  if(midicounter==1) {
-    mididata[midicounter]=rx_byte[0];
-    midicounter++;
-  }
-                            
-  // received 144: start receiving note_on (3 bytes)
-  // e.g. 144 56 40
-  if((rx_byte[0]==144 || rx_byte[0]==176)  && midicounter==0) {
-    //receiving_note_on = 1;
-    mididata[midicounter]=rx_byte[0];
-    midicounter++;
-  }  */
-
-static void init_after_USB() {
-  
-  openSCwaveform(0, 2);
-  openSCwaveform(1, 3);
-  openSCwaveform(2, 3);
-  
-  initAudio();
+   } 
 }
 
 static void initAudio() {
@@ -402,9 +321,6 @@ void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
   if ( openresult == FR_OK) {
 	// f_open ok
     f_lseek(&ssample[SCwaveformID], 44);
-		//char a[] = "";
-		//sprintf(a, "%ld", f_size(&ssample));
-    //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)a, CENTER_MODE);
   } else {
 		char a[] = "";
 		sprintf(a, "%d", openresult);
@@ -463,9 +379,23 @@ void computeAudio() {
   }
   //computeVoice(440);
   
-  adsr_timer++;
+  // adsr[4] = {140,50,20,20};
   
-  if(adsr_timer > 25) {
+  // attack
+  // adsr_volume_multi goes to 1 at maximum
+  if(adsr_timer<adsr[0]) {
+    adsr_volume_multi = adsr_timer / adsr[0];
+  }
+  
+  // decay
+  uint8_t decaystage = adsr_timer-adsr[0];
+  if(adsr_timer>adsr[0] && decaystage<adsr[1])
+  {
+    //adsr_volume_multi -= 0.01; //1 - (((float)decaystage / adsr[1]) * adsr[2]);
+    adsr_volume_multi = 1 - ((decaystage / adsr[1]) * (1-adsr[2]));
+  }
+  
+  if(adsr_timer > 300) {
     memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
   } else {
   
@@ -473,26 +403,13 @@ void computeAudio() {
   	// float to short
   	for (int k=0; k<2048; k=k+4) {
     
-      // mix
-      /*
-      f_bufPost_mixdown_left[k/4] = (0.8 * f_bufPost_left[0][k/4])
-                            + (0.8 * f_bufPost_left[1][k/4])
-                            + (0.8 * f_bufPost_left[2][k/4])
-                            + (0.8 * f_bufPost_left[3][k/4])
-                              + (0.8 * f_ssample_outChannel[0][k/4]);
-      f_bufPost_mixdown_right[k/4] = (0.8 * f_bufPost_right[0][k/4])
-                            + (0.8 * f_bufPost_right[1][k/4])
-                            + (0.8 * f_bufPost_right[2][k/4])
-                            + (0.8 * f_bufPost_right[3][k/4]);
-      */
-    
-      f_bufPost_mixdown_left[k/4] =   (f_ssample_outChannel_Volume[0] * f_ssample_outChannel[0][k/4])
-                                      + (f_ssample_outChannel_Volume[1] * f_ssample_outChannel[1][k/4])
-                                      + (f_ssample_outChannel_Volume[2] * f_ssample_outChannel[2][k/4])
-                                      + (f_ssample_outChannel_Volume[3] * f_ssample_outChannel[3][k/4]);
-    
-    
-    
+      f_bufPost_mixdown_left[k/4] =   (
+                                        (f_ssample_outChannel_Volume[0] * f_ssample_outChannel[0][k/4])
+                                        + (f_ssample_outChannel_Volume[1] * f_ssample_outChannel[1][k/4])
+                                        + (f_ssample_outChannel_Volume[2] * f_ssample_outChannel[2][k/4])
+                                        + (f_ssample_outChannel_Volume[3] * f_ssample_outChannel[3][k/4])
+                                      ) * adsr_volume_multi;
+
   		// to short
   		resleft[k/4] = (short)(f_bufPost_mixdown_left[k/4] * 32768);
   		//resright[k/4] = (short)(f_bufPost_mixdown_right[k/4] * 32768);
@@ -505,6 +422,9 @@ void computeAudio() {
     }
 		
 	}
+  
+  adsr_timer++;
+  
 }
 
 void computeVoice(float freq, uint8_t voiceID) {
@@ -596,10 +516,6 @@ void computeOscillatorOut(uint8_t ssampleBufferID, uint8_t channelID, uint16_t s
   }
 }
 
-void OTG_FS_IRQHandler(void) {
-  HAL_HCD_IRQHandler(&hhcd);
-}
-
 // Interrupt handler shared between:
 // SD_DETECT pin, USER_KEY button and touch screen interrupt
 void EXTI15_10_IRQHandler(void) {
@@ -646,7 +562,7 @@ void drawInterface() {
   
   drawVolumeIndicators();
   
-  drawStepSeqTopBar(0);
+  drawStepSeqTopBar();
   
   //BSP_LCD_DrawPolygon(wave1,50);
     
@@ -728,15 +644,14 @@ void drawSequencer() {
   BSP_LCD_FillRect(0,24,480,360);
 }
 
-void drawStepSeqTopBar(uint16_t active) {
+void drawStepSeqTopBar() {
   BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
   for (int i=0; i < 16; i++) {
     BSP_LCD_FillRect(230+(i*12),7,10,10);
   }
-  if (active > 0) {
-    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    BSP_LCD_FillRect(230+((active-1)*12),7,10,10);
-  }
+  // draw current active step
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_FillRect(230+(currentStep*12),7,10,10);
 }
 
 void drawWaveSelector() {  
@@ -812,6 +727,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           drawWaveSelector();
         }
         
+        //vco2 select
         if(touchx > 40 && touchx < 100 && touchy > 115 && touchy < 175) {
           touchMap = "waveselect";
           varToUpdate = &vco2wave;
@@ -819,6 +735,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           drawWaveSelector();
         }
         
+        //vco3 select
         if(touchx > 40 && touchx < 100 && touchy > 195 && touchy < 255) {
           touchMap = "waveselect";
           varToUpdate = &vco3wave;
@@ -826,7 +743,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           drawWaveSelector();
         }
         
-        // volume control
+        // volume control (same interface for all buttons)
         if(touchx > 110 && touchx < 170 && touchy > 35 && touchy < 95) {
           touchMap = "volumecontrol";
           drawVolumeControls();
@@ -843,8 +760,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         // sequencerselect
         if(touchx > 280 && touchx < 480 && touchy > 0 && touchy < 20) {
           touchMap = "waveselect";
-          //varToUpdate = &vco3wave;
-          //waveformToUpdate = 2;
           drawSequencer();
         }
       }
@@ -920,13 +835,44 @@ static void initTimer(uint16_t period) {
   }
 }
 
+// Initialize note off timer
+static void initNoteOffTimer(uint16_t period) {
+  uint32_t prescaler           = (uint32_t)((SystemCoreClock / 2) / 10000) - 1;
+  timer2.Instance               = TIMy;
+  timer2.Init.Period            = period - 1;
+  timer2.Init.Prescaler         = prescaler;
+  timer2.Init.ClockDivision     = 0;
+  timer2.Init.CounterMode       = TIM_COUNTERMODE_UP;
+  timer2.Init.RepetitionCounter = 0;
+
+  if (HAL_TIM_Base_Init(&timer2) != HAL_OK) {
+    Error_Handler();
+  }
+  if (HAL_TIM_Base_Start_IT(&timer2) != HAL_OK) {
+    Error_Handler();
+  }
+}
+
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim) {
-  // TIMx Peripheral clock enable
-  TIMx_CLK_ENABLE();
-  // Set the TIMx priority
-  HAL_NVIC_SetPriority(TIMx_IRQn, 3, 0);
-  // Enable the TIMx global Interrupt
-  HAL_NVIC_EnableIRQ(TIMx_IRQn);
+  // check timer instance,
+  // TIM3 = sequencer
+  if(htim->Instance==TIM3) {
+    // TIMx Peripheral clock enable
+    TIMx_CLK_ENABLE();
+    // Set the TIMx priority
+    HAL_NVIC_SetPriority(TIMx_IRQn, 3, 0);
+    // Enable the TIMx global Interrupt
+    HAL_NVIC_EnableIRQ(TIMx_IRQn);
+  }
+  
+  if(htim->Instance==TIM4) {
+    // TIMx Peripheral clock enable
+    TIMy_CLK_ENABLE();
+    // Set the TIMx priority
+    HAL_NVIC_SetPriority(TIMy_IRQn, 3, 0);
+    // Enable the TIMx global Interrupt
+    HAL_NVIC_EnableIRQ(TIMy_IRQn);
+  }
 }
 
 // Timer interrupt request.
@@ -934,37 +880,33 @@ void TIMx_IRQHandler(void) {
   HAL_TIM_IRQHandler(&timer);
 }
 
-// Callback function run whenever timer caused interrupt
+// Timer interrupt request.
+void TIMy_IRQHandler(void) {
+  HAL_TIM_IRQHandler(&timer2);
+}
+
+// Sequencer callback function
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-  //if (isBlinking) {
-  //  BSP_LED_Toggle(LED_GREEN);
-  //}
-  drawStepSeqTopBar(currentStep);
-  //sequence[currentStep];
+  // TIM3 = sequencer timer
+  if(htim->Instance==TIM3) {
+    currentStep++;
+    if(currentStep>15) {currentStep=0;}
+    
+    int8_t midistatus_buffer = mididata[0];
+    mididata[0] = 144;
+    mididata[1] = current_midi_note + sequence[currentStep];
+    mididata[2] = 100;
+    handle_midi();
+    mididata[0] = midistatus_buffer;
+
   
-  /*float req_freq = (13.75 * (pow(2,(current_midi_note + sequence[currentStep] -9.0)/12.0)));
-  char b[10];
-  int dingus = req_freq * 1000;
-  //sprintf(b, "%f",req_freq);
-  //sprintf(b, "bla%g", req_freq );
-  snprintf(b, 10, "%d",dingus);
-   BSP_LCD_SetFont(&Font12);
-   BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-   BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)"      ", RIGHT_MODE);
-   BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
- 
-   adsr_timer = 0;
-   voice_frequency[0] = req_freq;
-  */
-  int8_t mididata_buffer = mididata[0];
-  mididata[0] = 144;
-  mididata[1] = current_midi_note + sequence[currentStep];
-  mididata[2] = 100;
-  handle_midi();
-  mididata[0] = mididata_buffer;
-  currentStep++;
-  if(currentStep>16) {currentStep=1;}
+    drawStepSeqTopBar();
+  }
+  if(htim->Instance==TIM4) {
+    BSP_LED_Toggle(LED_GREEN);
+    // disable timer
+    HAL_NVIC_DisableIRQ(TIMy_IRQn);
+  }
 }
 
 
