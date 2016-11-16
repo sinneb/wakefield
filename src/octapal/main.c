@@ -44,8 +44,8 @@ static void initTimer(uint16_t period);
 uint8_t currentLCDcolor = 0;
 const uint32_t LCDColorarray[] = { LCD_COLOR_YELLOW, LCD_COLOR_GREEN, LCD_COLOR_ORANGE, LCD_COLOR_MAGENTA };
 
-#define VOLUME 20
-#define SAMPLE_RATE 96000
+#define VOLUME 50
+#define SAMPLE_RATE 32000 // max freq out 16000Hz 
 #define AUDIO_DMA_BUFFER_SIZE 4096
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
 #define AUDIO_DMA_BUFFER_SIZE4 (AUDIO_DMA_BUFFER_SIZE >> 2)
@@ -114,19 +114,18 @@ uint16_t printpos = 5;
 uint16_t printypos = 5;
 
 
-float f_ssample[4][600];
+float f_ssample[8][600];
 uint8_t active_ssample = 1;
 uint8_t receiving_note_on = 0;
 // max 32 cycle = 32*600 = 19200
 float f_ssample_freq_specific[19200];
-float f_ssample_outChannel[4][600];
-float f_ssample_outChannel_Volume[4] = {0.3, 0.3, 0.3, 0.3};
+float f_ssample_outChannel[8][600];
+float f_ssample_outChannel_Volume[8] = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 float f_ssample_temp[600];
 float f_ssample_right[600];
 uint16_t ssample_lastpos = 0;
-uint16_t ssample_small_lastpos[4] = {0,0,0,0};
-uint16_t ssample_samplespertransfer[4] = {300,350,400,450};
-int16_t ssamples_remaining_idx[4] = {600,600,600,600};
+uint16_t ssample_small_lastpos[8] = {0,0,0,0,0,0,0,0};
+int16_t ssamples_remaining_idx[8] = {600,600,600,600,600,600,600,600};
 
 int16_t adsr_timer = 0;
 
@@ -145,12 +144,9 @@ uint16_t vco1wave = 1;
 uint16_t vco2wave = 2;
 uint16_t vco3wave = 3;
 
-FIL audio_file[4];
-FIL ssample[4];
-UINT bytes_read[4];
-UINT bytes_read2;
-UINT bytes_read3;
-UINT bytes_read4;
+FIL audio_file[8];
+FIL ssample[8];
+UINT bytes_read[8];
 UINT prev_bytes_read;
 FATFS fs;
 FATFS SDFatFs;
@@ -219,6 +215,11 @@ int main() {
   openSCwaveform(0, vco1wave);
   openSCwaveform(1, vco2wave);
   openSCwaveform(2, vco3wave);
+  openSCwaveform(3, 2);
+  openSCwaveform(4, 10);
+  openSCwaveform(5, 12);
+  openSCwaveform(6, 4);
+  openSCwaveform(7, 6);
   
   initAudio();
   
@@ -325,7 +326,7 @@ void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
 		char a[] = "";
 		sprintf(a, "%d", openresult);
       BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
-                              (uint8_t *)a, CENTER_MODE);
+                              (uint8_t *)"load error", CENTER_MODE);
     Error_Handler();
   }
 
@@ -408,6 +409,10 @@ void computeAudio() {
                                         + (f_ssample_outChannel_Volume[1] * f_ssample_outChannel[1][k/4])
                                         + (f_ssample_outChannel_Volume[2] * f_ssample_outChannel[2][k/4])
                                         + (f_ssample_outChannel_Volume[3] * f_ssample_outChannel[3][k/4])
+                                        + (f_ssample_outChannel_Volume[4] * f_ssample_outChannel[4][k/4])
+                                        + (f_ssample_outChannel_Volume[5] * f_ssample_outChannel[5][k/4])
+                                        + (f_ssample_outChannel_Volume[6] * f_ssample_outChannel[6][k/4])
+                                        + (f_ssample_outChannel_Volume[7] * f_ssample_outChannel[7][k/4])
                                       ) * adsr_volume_multi;
 
   		// to short
@@ -431,10 +436,14 @@ void computeVoice(float freq, uint8_t voiceID) {
   //compute oscillator outputs for note
   // required frequency * 3.2 outputs samples per Transfer
   float samplesPerTrans = freq * 3.2;
-  computeOscillatorOut(0, 0, samplesPerTrans); // 109.4 Hz
-  computeOscillatorOut(1,1, samplesPerTrans/.2); //1250 Hz
-  computeOscillatorOut(2,2, samplesPerTrans/4); // 140.3 Hz
-  //computeOscillatorOut(3,3, 1408); // 1562.1 Hz
+  computeOscillatorOut(0, 0, 1200); // 109.4 Hz
+  computeOscillatorOut(1,1, 1100); //1250 Hz
+  computeOscillatorOut(2,2, 1250); // 140.3 Hz
+  computeOscillatorOut(3,3, 1000); // 1562.1 Hz
+  computeOscillatorOut(4,4, 1400); // 1562.1 Hz
+  computeOscillatorOut(5,5, 900); // 1562.1 Hz
+  computeOscillatorOut(6,6, 1230); // 1562.1 Hz
+  computeOscillatorOut(7,7, 1600); // 1562.1 Hz
 }
 
 
