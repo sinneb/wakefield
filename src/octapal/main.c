@@ -44,8 +44,8 @@ static void initTimer(uint16_t period);
 uint8_t currentLCDcolor = 0;
 const uint32_t LCDColorarray[] = { LCD_COLOR_YELLOW, LCD_COLOR_GREEN, LCD_COLOR_ORANGE, LCD_COLOR_MAGENTA };
 
-#define VOLUME 50
-#define SAMPLE_RATE 32000 // max freq out 16000Hz 
+#define VOLUME 90
+#define SAMPLE_RATE 48000
 #define AUDIO_DMA_BUFFER_SIZE 4096
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
 #define AUDIO_DMA_BUFFER_SIZE4 (AUDIO_DMA_BUFFER_SIZE >> 2)
@@ -93,10 +93,12 @@ static uint8_t audioBufferFile[4][AUDIO_DMA_BUFFER_SIZE];
 
 // adsr timings
 float adsr_volume_multi = 1;
-float adsr[4] = {140,80,0.2,20};
-uint8_t noteOn = 0;
+float adsr[4] = {40,10,0.4,200};
+uint8_t midiNoteOn = 0;
 
 uint32_t prevTick = 0;
+// start editing voice 1
+uint8_t currentVoiceInEdit = 1;
 
 uint16_t *varToUpdate;
 uint16_t waveformToUpdate;
@@ -114,20 +116,20 @@ uint16_t printpos = 5;
 uint16_t printypos = 5;
 
 
-float f_ssample[8][600];
+float f_ssample[12][600];
 uint8_t active_ssample = 1;
 uint8_t receiving_note_on = 0;
 // max 32 cycle = 32*600 = 19200
 float f_ssample_freq_specific[19200];
-float f_ssample_outChannel[8][600];
-float f_ssample_outChannel_Volume[8] = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+float f_ssample_outChannel[12][600];  
+float f_ssample_outChannel_Volume[12] = {0.05, 0.05, 0.05, 0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05};
 float f_ssample_temp[600];
 float f_ssample_right[600];
 uint16_t ssample_lastpos = 0;
-uint16_t ssample_small_lastpos[8] = {0,0,0,0,0,0,0,0};
-int16_t ssamples_remaining_idx[8] = {600,600,600,600,600,600,600,600};
+uint16_t ssample_small_lastpos[12] = {0,0,0,0,0,0,0,0,0,0,0,0};
+int16_t ssamples_remaining_idx[12] = {600,600,600,600,600,600,600,600,600,600,600,600};
 
-int16_t adsr_timer = 0;
+int32_t adsr_timer = 0;
 
 short resleft[512];
 short resright[512];
@@ -143,10 +145,15 @@ uint8_t rx_byte[1];
 uint16_t vco1wave = 1;
 uint16_t vco2wave = 2;
 uint16_t vco3wave = 3;
+uint16_t vco4wave = 4;
+uint16_t vco5wave = 5;
+uint16_t vco6wave = 6;
+uint16_t vco7wave = 7;
+uint16_t vco8wave = 8;
 
-FIL audio_file[8];
-FIL ssample[8];
-UINT bytes_read[8];
+FIL audio_file[12];
+FIL ssample[12];
+UINT bytes_read[12];
 UINT prev_bytes_read;
 FATFS fs;
 FATFS SDFatFs;
@@ -191,8 +198,8 @@ int main() {
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
   
   // init sequencer
-  initTimer(20000);
-  initNoteOffTimer(10000);
+  //initTimer(20000);
+  //initNoteOffTimer(10000);
   
   // Init LCD and Touchscreen
   BSP_LCD_Init();
@@ -215,17 +222,21 @@ int main() {
   openSCwaveform(0, vco1wave);
   openSCwaveform(1, vco2wave);
   openSCwaveform(2, vco3wave);
-  openSCwaveform(3, 2);
-  openSCwaveform(4, 10);
-  openSCwaveform(5, 12);
-  openSCwaveform(6, 4);
-  openSCwaveform(7, 6);
+  openSCwaveform(3, vco4wave);
+  openSCwaveform(4, vco5wave);
+  openSCwaveform(5, vco6wave);
+  openSCwaveform(6, vco7wave);
+  openSCwaveform(7, vco8wave);
+  // openSCwaveform(8, 10);
+  // openSCwaveform(9, 12);
+  // openSCwaveform(10, 4);
+  // openSCwaveform(11, 6);
   
   initAudio();
   
   drawInterface();
   
-  voice_frequency[0] = 440;
+  //voice_frequency[0] = 440;
   
   while (1) {		
 	  //nothing is done here	
@@ -259,12 +270,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
   
 void handle_midi() {
   
-  char a[] = "";
-  sprintf(a, "%d %d %d", mididata[0],mididata[1],mididata[2]);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_DisplayStringAt(100, 7, (uint8_t *)a, LEFT_MODE);
+  // char a[] = "";
+//   sprintf(a, "%d %d %d", mididata[0],mididata[1],mididata[2]);
+//   BSP_LCD_SetFont(&Font12);
+//   BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
+//   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+//   BSP_LCD_DisplayStringAt(100, 7, (uint8_t *)a, LEFT_MODE);
   
   // note on if vel (mididata[2]) > 0
   if(mididata[0] == 144 && mididata[2] > 0) {
@@ -280,10 +291,29 @@ void handle_midi() {
     BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
    
     // start new note
-    noteOn = 1;
+    midiNoteOn = 1;
     adsr_timer = 0;
     voice_frequency[0] = req_freq;
-   }
+  }
+   
+ if(mididata[0] == 144 && mididata[2] == 0) {
+   float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
+  
+   char b[10];
+   int dingus = req_freq * 1000;
+   snprintf(b, 10, "%d",dingus);
+   BSP_LCD_SetFont(&Font12);
+   BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
+   BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+   BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)"    off", RIGHT_MODE);
+   //BSP_LCD_DisplayStringAt(7, 7, (uint8_t *)b, RIGHT_MODE);
+ 
+   // end this note
+   midiNoteOn = 0;
+   //midiNoteOn = 1;
+   //adsr_timer = 0;
+   //voice_frequency[0] = req_freq;
+  }
    
    if(mididata[0] == 176) {
      if(mididata[1]==71) {
@@ -347,6 +377,22 @@ void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
     // use j/2 because of conversion from 2's comp to short
 		f_ssample[SCwaveformID][j/2] = ((float)tempshort/32768);
   }
+  
+  //   // temp performance test
+  //
+  //   //CORE_SysTickEn();
+  //   float f = 1.01f;
+  //   uint32_t it = HAL_GetTick();
+  //   float f2 = f * 2.29f;
+  //   uint32_t it2 = HAL_GetTick();
+  //
+  //   BSP_LCD_Clear(LCD_COLOR_BLUE);
+  // char a[] = "";
+  // sprintf(a, "%ld", it2);
+  //     BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
+  //                             (uint8_t *)a, CENTER_MODE);
+  //   Error_Handler();
+  
 }
 
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
@@ -384,19 +430,26 @@ void computeAudio() {
   
   // attack
   // adsr_volume_multi goes to 1 at maximum
-  if(adsr_timer<adsr[0]) {
-    adsr_volume_multi = adsr_timer / adsr[0];
+  
+  // Attack, Decay and Sustain because noteon
+  if(midiNoteOn==1) {
+    if(adsr_timer<adsr[0]) {
+      adsr_volume_multi = adsr_timer / adsr[0];
+    }
+  
+    // decay
+    uint32_t decaystage = adsr_timer-adsr[0];
+    if(adsr_timer>adsr[0] && decaystage<adsr[1])
+    {
+      //adsr_volume_multi -= 0.01; //1 - (((float)decaystage / adsr[1]) * adsr[2]);
+      adsr_volume_multi = 1 - ((decaystage / adsr[1]) * (1-adsr[2]));
+    }
+  } else {
+    adsr_volume_multi = adsr_volume_multi - (1 / adsr[3]);
   }
   
-  // decay
-  uint8_t decaystage = adsr_timer-adsr[0];
-  if(adsr_timer>adsr[0] && decaystage<adsr[1])
-  {
-    //adsr_volume_multi -= 0.01; //1 - (((float)decaystage / adsr[1]) * adsr[2]);
-    adsr_volume_multi = 1 - ((decaystage / adsr[1]) * (1-adsr[2]));
-  }
-  
-  if(adsr_timer > 300) {
+
+  if(adsr_volume_multi<=0){//adsr_timer > 30000) {
     memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
   } else {
   
@@ -413,6 +466,10 @@ void computeAudio() {
                                         + (f_ssample_outChannel_Volume[5] * f_ssample_outChannel[5][k/4])
                                         + (f_ssample_outChannel_Volume[6] * f_ssample_outChannel[6][k/4])
                                         + (f_ssample_outChannel_Volume[7] * f_ssample_outChannel[7][k/4])
+//                                           + (f_ssample_outChannel_Volume[8] * f_ssample_outChannel[8][k/4])
+//                                           + (f_ssample_outChannel_Volume[9] * f_ssample_outChannel[9][k/4])
+//                                           + (f_ssample_outChannel_Volume[10] * f_ssample_outChannel[10][k/4])
+//                                           + (f_ssample_outChannel_Volume[11] * f_ssample_outChannel[11][k/4])
                                       ) * adsr_volume_multi;
 
   		// to short
@@ -432,18 +489,35 @@ void computeAudio() {
   
 }
 
+  //   //CORE_SysTickEn();
+  //   float f = 1.01f;
+  //   uint32_t it = HAL_GetTick();
+  //   float f2 = f * 2.29f;
+  //   uint32_t it2 = HAL_GetTick();
+  //
+  //   BSP_LCD_Clear(LCD_COLOR_BLUE);
+  // char a[] = "";
+  // sprintf(a, "%ld", it2);
+  //     BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8,
+  //                             (uint8_t *)a, CENTER_MODE);
+  //   Error_Handler();
+
 void computeVoice(float freq, uint8_t voiceID) {
   //compute oscillator outputs for note
   // required frequency * 3.2 outputs samples per Transfer
   float samplesPerTrans = freq * 3.2;
-  computeOscillatorOut(0, 0, 1200); // 109.4 Hz
-  computeOscillatorOut(1,1, 1100); //1250 Hz
-  computeOscillatorOut(2,2, 1250); // 140.3 Hz
-  computeOscillatorOut(3,3, 1000); // 1562.1 Hz
-  computeOscillatorOut(4,4, 1400); // 1562.1 Hz
-  computeOscillatorOut(5,5, 900); // 1562.1 Hz
-  computeOscillatorOut(6,6, 1230); // 1562.1 Hz
-  computeOscillatorOut(7,7, 1600); // 1562.1 Hz
+  computeOscillatorOut(0, 0, samplesPerTrans); // 109.4 Hz
+  computeOscillatorOut(1,1, samplesPerTrans); //1250 Hz
+  // computeOscillatorOut(2,2, 300); // 140.3 Hz
+  // computeOscillatorOut(3,3, 550); // 1562.1 Hz
+  // computeOscillatorOut(4,4, 600); // 1562.1 Hz
+  // computeOscillatorOut(5,5, 560); // 1562.1 Hz
+  // computeOscillatorOut(6,6, 2800); // 1562.1 Hz
+  // computeOscillatorOut(7,7, 2000); // 1562.1 Hz
+  // computeOscillatorOut(8,4, 2800); // 1562.1 Hz
+  // computeOscillatorOut(9,5, 2000); // 1562.1 Hz
+  // computeOscillatorOut(10,6, 2230); // 1562.1 Hz
+  // computeOscillatorOut(11,7, 2400); // 1562.1 Hz
 }
 
 
@@ -477,10 +551,15 @@ void computeOscillatorOut(uint8_t ssampleBufferID, uint8_t channelID, uint16_t s
     }
     
     // interpolate to ssamplesamplespertransfer
-    inter1parray( f_ssample_freq_specific, samplesPerTransfer, f_ssample_temp, 600 );
+    //inter1parray( f_ssample_freq_specific, samplesPerTransfer, f_ssample_temp, 600 );
     
     // and interpolate to 512 and send to mixer
-    inter1parray( f_ssample_temp, 600, f_ssample_outChannel[channelID], 512 );
+    //inter1parray( f_ssample_temp, 600, f_ssample_outChannel[channelID], 512 );
+    
+    // also possible in one go
+    inter1parray( f_ssample_freq_specific, samplesPerTransfer,f_ssample_outChannel[channelID], 512);
+    
+    
     // set ssample_small_lastpos[ssampleBufferID] to lastpos
     ssample_small_lastpos[ssampleBufferID] += samplesPerTransfer; 
     // set overflow
@@ -550,29 +629,84 @@ void drawButton(uint16_t x, uint16_t y, uint8_t * textstring) {
 void drawInterface() {
   BSP_LCD_Clear(LCD_COLOR_BLUE);
   
-  BSP_LCD_SetTextColor(LCD_COLOR_ORANGE);
-  BSP_LCD_FillRect(0,0,480,24);
+  // voice selectors
+  BSP_LCD_SetTextColor(LCD_COLOR_RED);
+  BSP_LCD_FillRect(0,0,68,68);
+  BSP_LCD_SetTextColor(LCD_COLOR_YELLOW);
+  BSP_LCD_FillRect(0,68,68,68);
+  BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+  BSP_LCD_FillRect(0,136,68,68);
+  BSP_LCD_SetTextColor(LCD_COLOR_DARKMAGENTA);
+  BSP_LCD_FillRect(0,204,68,68);
   
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetBackColor(LCD_COLOR_ORANGE);
-  BSP_LCD_SetFont(&Font16);
-  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"OCTAPAL", LEFT_MODE);
   
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_DisplayStringAt(5, 60, (uint8_t *)"vco1", LEFT_MODE);
-  BSP_LCD_DisplayStringAt(5, 140, (uint8_t *)"vco2", LEFT_MODE);
-  BSP_LCD_DisplayStringAt(5, 220, (uint8_t *)"vco3", LEFT_MODE);
+  if(currentVoiceInEdit==1) {
+    BSP_LCD_SetTextColor(LCD_COLOR_RED);
+  }
+  else if(currentVoiceInEdit==2) {
+    BSP_LCD_SetTextColor(LCD_COLOR_YELLOW);
+  }
+  BSP_LCD_FillRect(68,0,412,24);
   
-  drawSSample(vco1wave,40,35);
-  drawSSample(vco2wave,40,115);
-  drawSSample(vco3wave,40,195);
   
-  drawVolumeIndicators();
   
-  drawStepSeqTopBar();
+  BSP_LCD_SetFont(&Font20);
+  if(currentVoiceInEdit==1) {
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetBackColor(LCD_COLOR_RED);
+    BSP_LCD_DisplayStringAt(78, 4, (uint8_t *)"voice 1", LEFT_MODE);
+  }
+  else if(currentVoiceInEdit==2) {
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_SetBackColor(LCD_COLOR_YELLOW);
+    BSP_LCD_DisplayStringAt(78, 4, (uint8_t *)"voice 2", LEFT_MODE);
+  }
+ 
   
+  // BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+//   BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+//   BSP_LCD_SetFont(&Font12);
+//   BSP_LCD_DisplayStringAt(5, 60, (uint8_t *)"osc1", LEFT_MODE);
+//   BSP_LCD_DisplayStringAt(5, 140, (uint8_t *)"osc2", LEFT_MODE);
+// //  BSP_LCD_DisplayStringAt(5, 220, (uint8_t *)"osc3", LEFT_MODE);
+//
+  if(currentVoiceInEdit==1) {
+    drawSSample(vco1wave,78,35);
+    drawSSample(vco2wave,78,115);
+  }  
+  
+  if(currentVoiceInEdit==2) {
+   drawSSample(vco3wave,78,35);
+   drawSSample(vco4wave,78,115);
+ }
+   
+   // tuning per osc
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   BSP_LCD_FillRect(150,35,60,60);
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   BSP_LCD_FillRect(150,115,60,60);
+   
+   // volume per osc
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   BSP_LCD_FillRect(222,35,60,60);
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   BSP_LCD_FillRect(222,115,60,60);
+   
+   // adsr per voice
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   BSP_LCD_FillRect(294,75,60,60);
+      
+   // seq per voice
+   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+   for (int i=0; i < 16; i++) {
+     BSP_LCD_FillRect(78+(i*12),200,10,10);
+   }    
+// //  drawSSample(vco3wave,40,195);
+//
+//   drawVolumeIndicators();
+//
+//   drawStepSeqTopBar();
+//
   //BSP_LCD_DrawPolygon(wave1,50);
     
   //drawButton(10,29,(uint8_t *)"1");
@@ -585,7 +719,7 @@ void drawVolumeIndicators() {
   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
   BSP_LCD_FillRect(110,35,60,60);
   BSP_LCD_FillRect(110,115,60,60);
-  BSP_LCD_FillRect(110,195,60,60);
+ // BSP_LCD_FillRect(110,195,60,60);
 
   // indicator 1
   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
@@ -603,20 +737,20 @@ void drawVolumeIndicators() {
   BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
   BSP_LCD_FillRect(133,128+(34-f_ssample_outChannel_Volume[1]*34),14,(f_ssample_outChannel_Volume[1]*34)+1);
   
-  //indicator 3
-  BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
-  BSP_LCD_FillRect(130,205,20,40);
-  BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
-  BSP_LCD_FillRect(131,206,18,38);
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_FillRect(133,208+(34-f_ssample_outChannel_Volume[2]*34),14,(f_ssample_outChannel_Volume[2]*34)+1);
+  // //indicator 3
+  // BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
+  // BSP_LCD_FillRect(130,205,20,40);
+  // BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+  // BSP_LCD_FillRect(131,206,18,38);
+  // BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  // BSP_LCD_FillRect(133,208+(34-f_ssample_outChannel_Volume[2]*34),14,(f_ssample_outChannel_Volume[2]*34)+1);
 }
 
 void drawVolumeControls() {
   BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
   BSP_LCD_FillRect(110,35,300,60);
   BSP_LCD_FillRect(110,115,300,60);
-  BSP_LCD_FillRect(110,195,300,60);
+  //BSP_LCD_FillRect(110,195,300,60);
   
   // exit button
   BSP_LCD_FillRect(420,35,52,60);
@@ -625,26 +759,27 @@ void drawVolumeControls() {
   BSP_LCD_SetFont(&Font12);
   BSP_LCD_DisplayStringAt(433, 60, (uint8_t *)"exit", LEFT_MODE);
   
+  // volume controls per osc
   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
   BSP_LCD_FillRect(130,45,260,40);
   BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
   BSP_LCD_FillRect(131,46,258,38);
   BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_FillRect(134,49,(f_ssample_outChannel_Volume[0] * 252)+1,32);
+  BSP_LCD_FillRect(134,49,(f_ssample_outChannel_Volume[0] * 252 * 6)+1,32);
   
   BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
   BSP_LCD_FillRect(130,125,260,40);
   BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
   BSP_LCD_FillRect(131,126,258,38);
   BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_FillRect(134,129,(f_ssample_outChannel_Volume[1] * 252)+1,32);
+  BSP_LCD_FillRect(134,129,(f_ssample_outChannel_Volume[1] * 252 * 6 )+1,32);
   
-  BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
-  BSP_LCD_FillRect(130,205,260,40);
-  BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
-  BSP_LCD_FillRect(131,206,258,38);
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_FillRect(134,209,(f_ssample_outChannel_Volume[2] * 252)+1,32);
+  // BSP_LCD_SetTextColor(LCD_COLOR_LIGHTGRAY);
+  // BSP_LCD_FillRect(130,205,260,40);
+  // BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
+  // BSP_LCD_FillRect(131,206,258,38);
+  // BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  // BSP_LCD_FillRect(134,209,(f_ssample_outChannel_Volume[2] * 252 * 6)+1,32);
 }
 
 void drawSequencer() {
@@ -728,49 +863,80 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
       
       // determine and handle current touchMap
       if (strcmp(touchMap,"main")==0) {
+        // voice select 1
+        if(touchx > 0 && touchx < 68 && touchy > 0 && touchy < 68) {
+          currentVoiceInEdit = 1;
+          drawInterface();
+        }
+        // voice select 2
+        if(touchx > 0 && touchx < 68 && touchy > 68 && touchy < 136) {
+          currentVoiceInEdit = 2;
+          drawInterface();
+        }
+        // voice select 3
+        if(touchx > 0 && touchx < 68 && touchy > 136 && touchy < 204) {
+          
+        }
+        // voice select 4
+        if(touchx > 0 && touchx < 68 && touchy > 204 && touchy < 272) {
+          
+        }
+                
         // vco1 select
-        if(touchx > 40 && touchx < 100 && touchy > 35 && touchy < 95) {
+        if(touchx > 78 && touchx < 138 && touchy > 35 && touchy < 95) {
           touchMap = "waveselect";
-          varToUpdate = &vco1wave;
-          waveformToUpdate = 0;
+          if(currentVoiceInEdit==1) {
+            varToUpdate = &vco1wave;
+            waveformToUpdate = 0;
+          } 
+          if(currentVoiceInEdit==2) {
+            varToUpdate = &vco3wave;
+            waveformToUpdate = 2;
+          } 
           drawWaveSelector();
         }
         
         //vco2 select
-        if(touchx > 40 && touchx < 100 && touchy > 115 && touchy < 175) {
+        if(touchx > 78 && touchx < 138 && touchy > 115 && touchy < 175) {
           touchMap = "waveselect";
-          varToUpdate = &vco2wave;
-          waveformToUpdate = 1;
+          if(currentVoiceInEdit==1) {
+            varToUpdate = &vco2wave;
+            waveformToUpdate = 1;
+          } 
+          if(currentVoiceInEdit==2) {
+            varToUpdate = &vco4wave;
+            waveformToUpdate = 3;
+          } 
           drawWaveSelector();
         }
         
-        //vco3 select
-        if(touchx > 40 && touchx < 100 && touchy > 195 && touchy < 255) {
-          touchMap = "waveselect";
-          varToUpdate = &vco3wave;
-          waveformToUpdate = 2;
-          drawWaveSelector();
-        }
+        // //vco3 select
+        // if(touchx > 40 && touchx < 100 && touchy > 195 && touchy < 255) {
+        //   touchMap = "waveselect";
+        //   varToUpdate = &vco3wave;
+        //   waveformToUpdate = 2;
+        //   drawWaveSelector();
+        // }
         
-        // volume control (same interface for all buttons)
-        if(touchx > 110 && touchx < 170 && touchy > 35 && touchy < 95) {
-          touchMap = "volumecontrol";
-          drawVolumeControls();
-        }
-        if(touchx > 110 && touchx < 170 && touchy > 115 && touchy < 175) {
-          touchMap = "volumecontrol";
-          drawVolumeControls();
-        }
-        if(touchx > 110 && touchx < 170 && touchy > 195 && touchy < 255) {
-          touchMap = "volumecontrol";
-          drawVolumeControls();
-        }
+        // // volume control (same interface for all buttons)
+//         if(touchx > 110 && touchx < 170 && touchy > 35 && touchy < 95) {
+//           touchMap = "volumecontrol";
+//           drawVolumeControls();
+//         }
+//         if(touchx > 110 && touchx < 170 && touchy > 115 && touchy < 175) {
+//           touchMap = "volumecontrol";
+//           drawVolumeControls();
+//         }
+        // if(touchx > 110 && touchx < 170 && touchy > 195 && touchy < 255) {
+        //   touchMap = "volumecontrol";
+        //   drawVolumeControls();
+        // }
         
         // sequencerselect
-        if(touchx > 280 && touchx < 480 && touchy > 0 && touchy < 20) {
-          touchMap = "waveselect";
-          drawSequencer();
-        }
+        // if(touchx > 280 && touchx < 480 && touchy > 0 && touchy < 20) {
+//           touchMap = "waveselect";
+//           drawSequencer();
+//         }
       }
         
       else if (strcmp(touchMap,"waveselect")==0) {
@@ -797,20 +963,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         // BSP_LCD_FillRect(130,45,260,40);
         // (130,45,260,40); 125 205
         if(touchx > 130 && touchx < 390 && touchy > 45 && touchy < 85) {
-          f_ssample_outChannel_Volume[0] = ((touchx - 130) / 260.0);
+          f_ssample_outChannel_Volume[0] = (((touchx - 130) / 260.0) / 6);
           drawVolumeControls();
         }
         
         if(touchx > 130 && touchx < 390 && touchy > 125 && touchy < 165) {
-          f_ssample_outChannel_Volume[1] = ((touchx - 130) / 260.0);
+          f_ssample_outChannel_Volume[1] = (((touchx - 130) / 260.0) / 6);
           drawVolumeControls();
         }
         
-        if(touchx > 130 && touchx < 390 && touchy > 205 && touchy < 245) {
-          f_ssample_outChannel_Volume[2] = ((touchx - 130) / 260.0);
-          drawVolumeControls();
-        }
-        
+        // if(touchx > 130 && touchx < 390 && touchy > 205 && touchy < 245) {
+        //   f_ssample_outChannel_Volume[2] = (((touchx - 130) / 260.0) / 6);
+        //   drawVolumeControls();
+        // }
+        //
         // exit
         // 420,35,52,60
         if(touchx > 420 && touchx < 472 && touchy > 35 && touchy < 95) {
@@ -909,7 +1075,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     mididata[0] = midistatus_buffer;
 
   
-    drawStepSeqTopBar();
+    //drawStepSeqTopBar();
   }
   if(htim->Instance==TIM4) {
     BSP_LED_Toggle(LED_GREEN);

@@ -34,6 +34,12 @@ float interp1( float x, float a[], int n )
     return a[j] + (x - j) * (a[j+1] - a[j]);
 }
 
+// float lerp(float a, float b, float f)
+// {
+//     return (a * (1.0f - f)) + (b * f);
+// }
+
+
     // linear interpolate array a[] -> array b[]
 void inter1parray( float a[], int n, float b[], int m )
 {
@@ -42,6 +48,8 @@ void inter1parray( float a[], int n, float b[], int m )
         b[j] = interp1( j*step, a, n );
     }
 }
+
+
 
 //..............................................................................
     // parabola through 3 points, -1 < x < 1
