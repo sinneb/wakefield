@@ -19,6 +19,34 @@ a midi controlled soundmodule
 #include "stm32746g_discovery_sd.h"
 #include "stm32f7xx_hal.h"
 
+#include "soundpipe.h"
+
+// soundpipe globals
+#define MY_BUFSIZE 64
+
+static volatile uint8_t nextbuf;
+static int16_t buf0[MY_BUFSIZE];
+static int16_t buf1[MY_BUFSIZE];
+
+/* SOUNDPIPE */
+
+#define NOSCS 5
+
+static const uint8_t scale[] = {48, 60, 65, 67, 72, 79, 64, 52};
+
+static uint8_t please_play = 0;
+static sp_data *sp;
+static sp_ftbl *ft;
+static sp_osc *osc;
+static sp_fosc *fosc[NOSCS];
+static sp_revsc *revsc;
+
+uint32_t compute_buffer(int16_t *pbuf, int  bufsize);
+
+__IO uint32_t XferCplt = 0;
+
+// end soundpipe globals
+
 #include "ff.h"
 #include "ff_gen_drv.h"
 #include "sd_diskio.h"
@@ -236,6 +264,20 @@ int main() {
   // openSCwaveform(11, 6);
   
   initAudio();
+  
+  sp_create(&sp);
+  sp->sr = 48000;
+
+  sp_ftbl_create(sp, &ft, 8192);
+  sp_gen_sine(sp, ft);
+
+  sp_osc_create(&osc);
+
+  sp_osc_init(sp, osc, ft, 0);
+  osc->freq = 0.2f;
+  osc->amp = 1.f;
+  uint32_t i;
+  
   
   drawInterface();
   

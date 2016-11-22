@@ -87,9 +87,10 @@ C_OBJ += $(addprefix $(BUILD_DIR)/, $(notdir $(ALL_SRC:.c=.o)))
 
 DEPS += $(ASM_OBJ:.o=.d) $(C_OBJ:.o=.d)
 
-LIBS += -lm
+LIBS += -lm -lsoundpipe
 
 CFLAGS += -std=c11 -fsigned-char -ffunction-sections -fdata-sections -Wall
+CFLAGS += -DNO_LIBSNDFILE 
 
 LD_FLAGS += -Lmake/devices -L$(LIB_DIR)
 LD_FLAGS += -Xlinker --gc-sections -Wl,-Map,$(BIN_DIR)/$(TARGET_NAME).map
