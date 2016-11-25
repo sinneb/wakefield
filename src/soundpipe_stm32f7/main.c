@@ -24,9 +24,12 @@ soundpipe on stm32f7 discovery
 
 static sp_data *sp;
 static sp_blsaw *blsaw;
-static sp_blsaw *blsaw2;
+static sp_ftbl *ft;
+static sp_posc3 *posc3;
 
-#define VOLUME 90
+uint8_t audioReady = 0;
+
+#define VOLUME 40
 #define SAMPLE_RATE 48000
 #define AUDIO_DMA_BUFFER_SIZE 4096
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
@@ -51,13 +54,18 @@ DMA_HandleTypeDef  g_DmaHandle;
 enum{ ADC_BUFFER_LENGTH = 8192 };
 uint32_t g_ADCBuffer[ADC_BUFFER_LENGTH];
 
+uint16_t ADCchannelValues[4];
+
 int main() {
   CPU_CACHE_Enable();
   HAL_Init();
   SystemClock_Config(); 
   ConfigureADC();
   ConfigureDMA();
-      HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
+  HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
+  
+	//volatile uint32_t counter = 1000;
+	//while(counter--);
   
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Off(LED_GREEN);
@@ -69,34 +77,46 @@ int main() {
 	  BSP_TS_ITConfig();
   }  
 
+BSP_LCD_Clear(LCD_COLOR_DARKMAGENTA);
   initAudio();
-  
+
   drawInterface();
   
   sp_create(&sp);
   sp->sr = 48000;
+  
+  sp_ftbl_create(sp, &ft, 2048);
+  //sp_osc_create(&osc);
+  sp_posc3_create(&posc3);
 
   sp_blsaw_create(&blsaw);
-  sp_blsaw_create(&blsaw2);
 
   sp_blsaw_init(sp, blsaw);
   *blsaw->freq = 440;
   *blsaw->amp = 0.5f;
   
-  sp_blsaw_init(sp, blsaw2);
-  *blsaw2->freq = 400;
-  *blsaw2->amp = 0.5f;
-  
+  sp_gen_sine(sp, ft);
+  sp_posc3_init(sp, posc3, ft);
+  posc3->freq = 300;
 
   while (1) {		
+    // determine audioReady moment
+    // reserve 700ms for initialisation
+    if(audioReady==0 && HAL_GetTick()>700) {
+      audioReady=1;
+    }
     //if (HAL_ADC_PollForConversion(&g_AdcHandle, 1000000) == HAL_OK)
     //        {
         //        g_ADCValue = HAL_ADC_GetValue(&g_AdcHandle);
       //          g_MeasurementNumber++;
-            		char a[] = "";
-            		sprintf(a, "%ld", g_ADCValue);
-                BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
-    //        }
+               char a[] = "";
+              //uint16_t newval = g_ADCValue - (uint16_t)*blsaw->freq;
+                        sprintf(a, "%ld", HAL_GetTick());
+                                BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+    // //     }
+                                //if(g_ADCValue>1000) {
+                                //  *blsaw->freq = g_ADCValue;
+                                //}
   }
 
   return 0;
@@ -145,21 +165,10 @@ void ConfigureADC()
     g_AdcHandle.Init.EOCSelection = DISABLE;
  
     HAL_ADC_Init(&g_AdcHandle);
- 
-    // adcChannel.Channel = ADC_CHANNEL_8;
-    // adcChannel.Rank = 1;
-    // adcChannel.SamplingTime = ADC_SAMPLETIME_480CYCLES;
-    // adcChannel.Offset = 0;
-    //
-    // if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
-    // {
-    //     //asm("bkpt 255");
-    //   Error_Handler();
-    // }
     
     adcChannel.Channel = ADC_CHANNEL_0;
     adcChannel.Rank = 1;
-    adcChannel.SamplingTime = ADC_SAMPLETIME_28CYCLES;
+    adcChannel.SamplingTime = ADC_SAMPLETIME_480CYCLES;
     if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
     {
       Error_Handler();
@@ -222,8 +231,41 @@ void ConfigureDMA()
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
     {
-      g_ADCValue = g_ADCBuffer[2004];//std::accumulate(g_ADCBuffer, g_ADCBuffer + ADC_BUFFER_LENGTH, 0) / ADC_BUFFER_LENGTH;
+      // uint32_t a2 = 0;
+      // for(int i=1000;i<1400;i=i+4) {
+      //   a2 = a2 + g_ADCBuffer[i+2];
+      // }
+      // a2 = a2 / 100;
+      
+//      if(abs(g_ADCValue-a2)>2) {g_ADCValue = a2;}
+      
+//      {
+        uint32_t channels[4] = {0,0,0,0};
+        for(int i=1000;i<1800;i=i+4) {
+          channels[0] = channels[0] + g_ADCBuffer[i+0];
+          channels[1] = channels[1] + g_ADCBuffer[i+1];
+          channels[2] = channels[2] + g_ADCBuffer[i+2];
+          channels[3] = channels[3] + g_ADCBuffer[i+3];
+        }
+      
+        channels[0] = channels[0] / 200;
+        channels[1] = channels[1] / 200;
+        channels[2] = channels[2] / 200;
+        channels[3] = channels[3] / 200;
+
+        if(abs(ADCchannelValues[0]-channels[0])>1) {ADCchannelValues[0] = channels[0];}
+        if(abs(ADCchannelValues[1]-channels[1])>1) {ADCchannelValues[1] = channels[1];}
+        if(abs(ADCchannelValues[2]-channels[2])>1) {ADCchannelValues[2] = channels[2];}
+        if(abs(ADCchannelValues[3]-channels[3])>1) {ADCchannelValues[3] = channels[3];}
+      
+        g_ADCValue = ADCchannelValues[2];
+      
+      //g_ADCValue = g_ADCBuffer[2];//std::accumulate(g_ADCBuffer, g_ADCBuffer + ADC_BUFFER_LENGTH, 0) / ADC_BUFFER_LENGTH;
         g_MeasurementNumber += ADC_BUFFER_LENGTH;
+        if(abs(g_ADCValue - (uint16_t)*blsaw->freq)>5) {
+        //  *blsaw->freq = g_ADCValue;
+        }
+       // 
     }
  
 void DMA2_Stream1_IRQHandler()
@@ -238,11 +280,14 @@ void ADC_IRQHandler()
 
 void initAudio() {
     if (BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, VOLUME, SAMPLE_RATE) != 0) {
+      BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"initAudio error", LEFT_MODE);
       Error_Handler();
     }
+    
     BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
     BSP_AUDIO_OUT_SetVolume(VOLUME);
     BSP_AUDIO_OUT_Play((uint16_t *)audioOutBuf, AUDIO_DMA_BUFFER_SIZE);
+
 }
 
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
@@ -265,18 +310,22 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 }
 
 void computeAudio() {
+  if(audioReady==1) {
+  
   // compute 2048 samples -> 512 audiosamples
   for(int i = 0; i < 1024; i+=2) {
-    SPFLOAT tmp = 0;
-    SPFLOAT tmp2 = 0;
-    sp_blsaw_compute(sp, blsaw, NULL, &tmp);
-    sp_blsaw_compute(sp, blsaw2, NULL, &tmp2);
+    SPFLOAT tmp = 0, tmp2=0;
     
-    SPFLOAT mixOut = (0.5f * tmp + 0.5f * tmp2);
+    sp_posc3_compute(sp, posc3, NULL, &tmp2);
+    sp_blsaw_compute(sp, blsaw, NULL, &tmp);
+
+    SPFLOAT mixOut = (0.5f * tmp2 + 0.5f * tmp);
 
     // channel outputs in 2's comp / signed int
     int_bufProcessedOut[i] = (mixOut * 32767);
     int_bufProcessedOut[i+1] = (mixOut * 32767);
+  
+    }
   }
 }
 

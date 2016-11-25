@@ -5,4 +5,4 @@ USE_FATFS = 0
 
 USER_INCLUDES += -Isrc/soundpipe_stm32f7
 
-CFLAGS += -O2 -ffast-math -g
+CFLAGS += -O3 -ffast-math -g
