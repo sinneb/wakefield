@@ -798,10 +798,9 @@ int sp_nsmp_compute(sp_data *sp, sp_nsmp *p, SPFLOAT *in, SPFLOAT *out);
 
 int sp_nsmp_print_index(sp_data *sp, sp_nsmp *p);
 typedef struct {
-    SPFLOAT freq, amp, iphs;
+    SPFLOAT freq, amp, iphs, inc;
     int32_t   lphs;
     sp_ftbl *tbl;
-    int inc;
 } sp_osc;
 
 int sp_osc_create(sp_osc **osc);

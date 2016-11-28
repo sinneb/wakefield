@@ -606,7 +606,7 @@ int sp_foo_destroy(sp_foo **p);
 int sp_foo_init(sp_data *sp, sp_foo *p);
 int sp_foo_compute(sp_data *sp, sp_foo *p, SPFLOAT *in, SPFLOAT *out);
 typedef struct sp_fosc{
-    SPFLOAT amp, freq, car, mod, indx, iphs;
+    SPFLOAT amp, freq, car, mod, indx, iphs, test;
     int32_t mphs, cphs;
     sp_ftbl *ft;
 } sp_fosc;
@@ -798,10 +798,9 @@ int sp_nsmp_compute(sp_data *sp, sp_nsmp *p, SPFLOAT *in, SPFLOAT *out);
 
 int sp_nsmp_print_index(sp_data *sp, sp_nsmp *p);
 typedef struct {
-    SPFLOAT freq, amp, iphs;
+    SPFLOAT freq, amp, iphs, inc;
     int32_t   lphs;
     sp_ftbl *tbl;
-    int inc;
 } sp_osc;
 
 int sp_osc_create(sp_osc **osc);
