@@ -1,6 +1,6 @@
 /*
 
-soundpipe on stm32f7 discovery
+wakefield synthesizer
 
 */
 
