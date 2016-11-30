@@ -1,51 +1,11 @@
-* thi.ng/ws-ldn-12
-ARM / STM32F7 DIY synth workshop (STM32F746-DISCO)
+* wakefield
 
-[[./assets/ws-ldn-12-minigorille.jpg]]
-
-Photo by Lysandre Follet
-
-*[[https://soundcloud.com/forthcharlie/sets/stm32f4][Check out demo tracks on Soundcloud]]*
+based on the [[https://github.com/thi-ng/ws-ldn-12]ARM / STM32F7 DIY synth workshop] by thi-ng
+based on the [[https://github.com/PaulBatchelor/Soundpipe] soundpipe] lightweight music DSP library by PaulBatchelor
 
 ** Project setup
 
-This repo contains 8 sub-projects, all described below and each
-compilable as standalone application. The repo also includes various
-support libraries of the thi.ng collection as Git submodules, located
-in the [[./ext][/ext]] folder:
-
-- [[http://thi.ng/ct-gui][ct-gui]] - tiny GUI library
-- [[http://thi.ng/ct-head][ct-head]] - common headers, macros & utils
-- [[http://thi.ng/synstack][ct-synstack]] - softsynth / DSP engine
-
-#+BEGIN_SRC shell
-  # clone with submodules
-  git clone https://github.com/thi-ng/ws-ldn-12 --recursive
-#+END_SRC
-
-*** Other 3rd party dependecies
-
-- [[http://www.st.com/web/en/catalog/tools/PF261909][STM32 CubeF7 SDK]]
-- [[https://launchpad.net/gcc-arm-embedded][GCC ARM toolchain]]
-- [[https://github.com/texane/stlink][ST-Link]]
-- [[https://gnuarmeclipse.github.io/openocd/releases/][OpenOCD]] (optional, using dev version w/ STM32F746 support)
-** Building
-
-This repo uses a flexible =Makefile= to build all included
-projects - *no IDE required!* The setup features:
-
-- easily customizable device config & linker scripts
-- no requirement to manually copy STM Cube SDK sources
-- catalog file(s) to selectively exclude various SDK source files (see
-  [[./make/sources.txt][/make/sources.txt]], can be overridden per project)
-- config flags to include USBH & FatFs middlewares
-- support for multiple sub-projects (with & without shared sources)
-- individual module (sub-project) configs (e.g. [[./make/modules/ex08.make][/make/modules/ex08.make]])
-- separate build & target folders for each module
-
-Currently only the STM32F746-DISCO board is supported, but additional
-board configurations can be easily added (see [[./make/devices/][/make/devices/]] for
-reference).
+This repo contains 8 sub-projects, originating from the STM32 workshop. The wakefield project is also a subproject.
 
 *IMPORTANT:* The =Makefile= requires the env var =STM_CUBE_HOME= to be
 set to the root of your STM SDK directory, e.g.
@@ -54,192 +14,13 @@ set to the root of your STM SDK directory, e.g.
 #+BEGIN_SRC shell
   export STM_CUBE_HOME=~/dev/arm/STM32Cube_FW_F7_V1.4.0
 
-  make module=ex01 clean
-  make module=ex01 -j4
+  make module=wakefield clean
+  make module=wakefield
 
   # flash device (0x800000 is ROM start address)
-  st-flash --reset write bin/ex01/app.bin 0x8000000
+  cp bin/wakefield/app.bin /Volumes/DIS_F746NG/
 
-  # combine for improved usability in terminal
-  make module=ex01 -j4 && st-flash --reset write bin/ex01/app.bin 0x8000000
 #+END_SRC
-
-** Examples
-*** ex01 - blinky
-
-[[./src/ex01/main.c][Source]]
-
-Simple Hello World LED blink example & demo of using EXTI interrupt to
-react to user button. Stops/starts blinking each time button is
-pressed.
-
-*** ex02 - LCD, touchscreen & GUI basics
-
-[[./src/ex02/main.c][Source]]
-
-Basic demonstration of working with BSP LCD & touchscreen modules, as
-well as intro to working w/ external libraries (here
-[[http://thi.ng/ct-gui][thi.ng/ct-gui]]).
-
-Edit the source file to [[./src/ex02/main.c#L28][uncomment different demo modes]]:
-
-- =demoWelcome()= - simple text rendering & random dots, non-interactive
-- =demoScribble()= - 5 point multi-touch drawing
-- =demoGUI()= - basic GUI usage example (dials control nothing)
-
-*** ex03 - Timers
-
-[[./src/ex03/main.c][Source]]
-
-Basic timer setup & multi-tasking example. Timer runs @ 10kHz and
-controls simple LED blinking task. Task can be suspended interactively
-by pressing user button.
-
-*** ex04 - Oscillators
-
-[[./src/ex04/main.c][Source]]
-
-Simple oscillator & frequency modulation experiment. The following
-oscillator types are supported for both main osc & modulator:
-
-| *ID* | *Type*                        |
-|------+-------------------------------|
-|    0 | Sine                          |
-|    1 | Saw                           |
-|    2 | Square                        |
-|    3 | Triangle                      |
-|    4 | Saw + Sin                     |
-|    5 | Noise (uses [[http://xoroshiro.di.unimi.it/][Xorshift128]] PRNG) |
-
-*Important:* The =mod_amp= field of the =Oscillator= struct is the
- modulation amplitude, but since the modulator is acting in the
- frequency domain, this amplitude too is in Hz.
-
-*** ex05 - USB stick WAV file streaming playback
-
-[[./src/ex05/main.c][Source]]
-
-This example uses the STM USB Host library & FatFS to access a USB
-memory stick connected to the board. Once USB handshake is complete,
-the app will then attempt to read the file =sound.wav= located in the
-root of the USB filesystem and start streaming to the headphone audio
-output (looping playback).
-
-*Important:*
-- The WAV file MUST be in 44.1kHz, 16bit stereo format
-- The example is currently configured to use the USB FS (fullspeed)
-  port (not HS (highspeed)). This can be changed via the
-  =ex05/usbh_conf.h= file.
-
-*** ex06 - thi.ng/synstack basics
-
-[[./src/ex06/main.c][Source]] | [[https://soundcloud.com/forthcharlie/stm32f7-synstack-ex06-ws-ldn-12][Soundcloud]]
-
-First example using [[http://thi.ng/synstack][thi.ng/synstack]] to implement polyphonic synth with
-fully configurable node based DSP graph (1 graph per voice). The graph
-implemented is shown below.
-
-We also define a musical scale to play a randomized, but always
-harmonic sequence and show how to dynamically modify parameters of the
-DSP node.
-
-*Note*: The graph doesn't show global LFOs, which are used for various
- modulation purposes (env mod, freq etc.).
-
-#+BEGIN_SRC dot :file assets/ex06-dag.png :exports results
-digraph g {
-  rankdir=LR;
-  node[color="black",style="filled",fontname="Inconsolata",fontcolor="white",fontsize=11];
-  edge[fontname="Inconsolata",fontsize=9];
-
-  env[label="AD(S)R"];
-  osc1[label="osc #1\n(spiral)"];
-  osc2[label="osc #2\n(saw-sin)"];
-  mul1[shape="circle",label="*"];
-  mul2[shape="circle",label="*"];
-  sum[shape="circle",label="+"];
-  filter[label="biquad LPF\n(randomized)"];
-  pan[label="stereo pan"];
-  delay[label="delay"];
-  env -> mul1;
-  env -> mul2;
-  osc1 -> mul1 -> sum;
-  osc2 -> mul2 -> sum;
-  sum -> filter -> pan -> delay;
-}
-#+END_SRC
-
-#+RESULTS:
-[[file:assets/ex06-dag.png]]
-
-*** ex07 - thi.ng/synstack & custom SDRAM delay
-
-[[./src/ex07/main.c][Source]] | [[https://soundcloud.com/forthcharlie/stm32f7-synstack-3-osc-fb-sdramdelay][Soundcloud]]
-
-Similar setup to *ex06* above, however to enable much longer delay
-times and not be limited by the <320KB of available on-chip RAM of the
-STM32F746-DISCO board, this example uses the 8MB "external" SDRAM
-(still on-board, just not in-chip), a [[./src/common/sdram_alloc.c][custom memory allocator]]
-(targetting SDRAM) and shows how to easily extend Synstack with custom
-DSP nodes - in this case a [[./src/synth_extras/osc_noise.c][noise oscillator]] and a [[./src/synth_extras/sdram_delay.c][new delay node]],
-which stores its long delay line in SDRAM, but then has to work with
-small, windowed sections in main RAM and mirror them back & forth.
-
-We also updated the DSP node graph to add the new oscillator, foldback
-distortion and replace the old delay with the new one...
-
-#+BEGIN_SRC dot :file assets/ex07-dag.png :exports results
-digraph g {
-  rankdir=LR;
-  node[color="black",style="filled",fontname="Inconsolata",fontcolor="white",fontsize=11];
-  edge[fontname="Inconsolata",fontsize=9];
-
-  env[label="AD(S)R"];
-  osc1[label="osc #1\n(spiral)"];
-  osc2[label="osc #2\n(saw-sin)"];
-  osc3[label="osc #3\n(noise)", color="red"];
-  mul1[shape="circle",label="*"];
-  mul2[shape="circle",label="*"];
-  mul3[shape="circle",label="*"];
-  sum[shape="circle",label="+"];
-  sum2[shape="circle",label="+"];
-  fb[label="foldback\ndistortion", color="red"];
-  filter[label="biquad LPF\n(randomized)"];
-  pan[label="stereo pan"];
-  delay[label="SDRAM delay", color="red"];
-  env -> mul1;
-  env -> mul2;
-  osc1 -> mul1 -> sum -> sum2;
-  osc2 -> mul2 -> sum;
-  osc3 -> mul3 -> sum2;
-  sum2 -> fb -> filter -> pan -> delay;
-}
-#+END_SRC
-
-#+RESULTS:
-[[file:assets/ex07-dag.png]]
-
-*** ex08 - Synstack & MIDI
-
-[[./src/ex08/main.c][Source]]
-
-Based on *ex07* synth setup, but with USB MIDI support to turn synth
-into actual instrument (4 voice polyphonic). Via the optional
-=LOG_MIDI= flag (defined in [[./make/modules/ex08.make][ex08.make]]), received MIDI message can be
-logged to the board's LCD screen.
-
-*Note:* Currently the synth only accepts MIDI Note On messages and
-ignores MIDI Note Off's, since all voices only use an ADR envelope,
-without "sustain" phase. This will be added later...
-** Resources
-
-- http://asm.thi.ng/ - links to all required SDK & build tools,
-  references, learning resources...
-
-** Contributors
-
-| *Name*          | *Role*                          | *Website* |
-| [[mailto:k@thi.ng][Karsten Schmidt]] | initiator & principal developer | [[http://thi.ng][thi.ng]]    |
 
 ** License
 
