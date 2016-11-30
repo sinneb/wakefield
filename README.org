@@ -1,7 +1,15 @@
 * wakefield
 
 based on the [[https://github.com/thi-ng/ws-ldn-12]ARM / STM32F7 DIY synth workshop] by thi-ng
+
 based on the [[https://github.com/PaulBatchelor/Soundpipe] soundpipe] lightweight music DSP library by PaulBatchelor
+
+** Features
+
+- Hardware MIDI over DIN (I'm using the MIDI shield from sparkfun)
+- Interrupt and DMA driven analog port readouts for four potentiometers
+- Hardware accelerated wavetable oscillator
+- ...
 
 ** Project setup
 
