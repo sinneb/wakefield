@@ -9,7 +9,7 @@ based on the [[https://github.com/PaulBatchelor/Soundpipe] soundpipe] lightweigh
 - Hardware MIDI over DIN (I'm using the MIDI shield from sparkfun)
 - Interrupt and DMA driven analog port readouts for four potentiometers
 - Hardware accelerated wavetable oscillator
-- ...
+- 4 menudriven 
 
 ** Project setup
 
