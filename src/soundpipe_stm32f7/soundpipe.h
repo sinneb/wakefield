@@ -98,6 +98,7 @@ int sp_ftbl_create(sp_data *sp, sp_ftbl **ft, size_t size);
 int sp_ftbl_destroy(sp_ftbl **ft);
 int sp_gen_vals(sp_data *sp, sp_ftbl *ft, const char *string);
 int sp_gen_sine(sp_data *sp, sp_ftbl *ft);
+int sp_gen_copy(sp_data *sp, sp_ftbl *ft);
 int sp_gen_file(sp_data *sp, sp_ftbl *ft, const char *filename);
 int sp_gen_sinesum(sp_data *sp, sp_ftbl *ft, const char *argstring);
 int sp_gen_line(sp_data *sp, sp_ftbl *ft, const char *argstring);

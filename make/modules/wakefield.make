@@ -5,4 +5,4 @@ USE_FATFS = 1
 
 USER_INCLUDES += -Isrc/wakefield
 
-CFLAGS += -O3 -ffast-math -g
+CFLAGS += -O0 -ffast-math -g

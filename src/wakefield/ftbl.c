@@ -85,6 +85,16 @@ int sp_gen_sine(sp_data *sp, sp_ftbl *ft)
     return SP_OK;
 }
 
+int sp_gen_copy(sp_data *sp, sp_ftbl *ft, float vars[600])
+{
+  unsigned long i;
+  SPFLOAT step = 2 * M_PI / ft->size;
+  for(i = 0; i < ft->size; i++){
+      ft->tbl[i] = vars[i];
+  }
+  return SP_OK;
+}
+
 #ifndef NO_LIBSNDFILE
 /*TODO: add error checking, make tests */
 int sp_gen_file(sp_data *sp, sp_ftbl *ft, const char *filename)

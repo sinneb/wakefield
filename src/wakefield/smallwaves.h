@@ -1,0 +1,1 @@
+extern uint8_t sswave[100][50];
