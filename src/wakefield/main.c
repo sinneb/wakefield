@@ -32,10 +32,10 @@ wakefield synthesizer
 
 static sp_data *sp;
 static sp_ftbl *ft[12];
-static sp_ftbl *work;
-//static sp_posc3 *posc3[8];
 static sp_osc *osc;
 static sp_osc *osc2;
+static sp_tadsr *tadsr;
+SPFLOAT adsr_trig = 0;
 
 // FATFS: sdcard access 
 #include "ff.h"
@@ -53,21 +53,26 @@ static char usb_drive_path[4];
 // datastructures for wavetables
 float f_wavetable[13][600];
 uint8_t d_wavetable[13][120];
-uint16_t vco1wave = 1;
-uint16_t vco2wave = 2;
-uint16_t vco3wave = 1;
-uint16_t vco4wave = 2;
-uint16_t vco5wave = 1;
-uint16_t vco6wave = 2;
-uint16_t vco7wave = 1;
-uint16_t vco8wave = 2;
+uint16_t osc1wave = 0;
+uint16_t osc2wave = 2;
+uint16_t osc3wave = 1;
+uint16_t osc4wave = 2;
+uint16_t osc5wave = 1;
+uint16_t osc6wave = 2;
+uint16_t osc7wave = 1;
+uint16_t osc8wave = 2;
 uint8_t audioBufferFile[4][AUDIO_DMA_BUFFER_SIZE];
+uint16_t *varToUpdate;
+uint16_t waveformToUpdate = 0;
 
 int teller1, teller2;
 
 // audio buffers
 static int16_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioOutBuf[AUDIO_DMA_BUFFER_SIZE];
+
+// wavetable browser
+int16_t startwave = 0;
 
 extern SAI_HandleTypeDef haudio_out_sai;
 
@@ -80,6 +85,7 @@ void drawVoiceInterface(uint8_t voice);
 void drawTemplate(char potfunctions[25], char pagetitle[20]);
 void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID);
 void drawWavetable(uint16_t wavetableID, uint16_t x, uint16_t starty);
+void drawWavetableSmall(uint16_t wavetableID, uint16_t x, uint16_t starty);
 
 uint32_t g_ADCValue;
 int g_MeasurementNumber;
@@ -149,9 +155,11 @@ int main() {
   sp_create(&sp);
   sp->sr = 48000;
   
+  // tbls
   sp_ftbl_create(sp, &ft[0], 600);
-  sp_ftbl_create(sp, &work, 600);
+  sp_ftbl_create(sp, &ft[1], 600);
 
+  // oscs
   sp_osc_create(&osc);
   sp_osc_create(&osc2);
   
@@ -159,33 +167,60 @@ int main() {
   osc->freq = 200;
   osc->amp = 0.5;
   
-  sp_osc_init(sp, osc2, ft[0], 0);
+  sp_osc_init(sp, osc2, ft[1], 0);
   osc2->freq = 250;
   osc2->amp = 0.3;
   
+  // adsr
+  sp_tadsr_create(&tadsr);
+  sp_tadsr_init(sp, tadsr);
+  tadsr->atk = 1.2;
+  tadsr->dec = 0.5;
+  tadsr->sus = 0.4;
+  tadsr->rel = 1.0;
+  
+  openSCwaveform(0, osc1wave);
+  sp_gen_copy(sp,ft[0],f_wavetable[0]);
+  
+  openSCwaveform(1, osc2wave);
+  sp_gen_copy(sp,ft[1],f_wavetable[1]);
+  
+  drawVoiceInterface(1);
+  
+  adsr_trig = 1;
+  
   while (1) {		
+    if(HAL_GetTick()%5000==0) {
+      //char a[] = "";
+      //sprintf(a, "%ld", HAL_GetTick());
+      //BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+      //adsr_trig = 1;
+    }
+      
+    
+    
     // determine audioReady moment
     // reserve 700ms for initialisation
     // the delay needs to match some initialisation timer?
     // somehow this initialisation if different upon reset of coldboot
     // investigate further
-    if(audioReady==0 && HAL_GetTick()>700) {
-      audioReady=1;
-      
-      openSCwaveform(0, vco1wave);
-  
-      for(int i = 0; i < ft[0]->size; i++){
-          ft[0]->tbl[i] = f_wavetable[0][i];
-      }
-      
-      drawVoiceInterface(1);
-      
-    }
+    // if(audioReady==0 && HAL_GetTick()>700) {
+//       audioReady=1;
+//
+//       openSCwaveform(0, osc1wave);
+//
+//       for(int i = 0; i < ft[0]->size; i++){
+//           ft[0]->tbl[i] = f_wavetable[0][i];
+//       }
+//
+//       drawVoiceInterface(1);
+//
+//     }
     
     //BSP_LED_Toggle(LED_GREEN);
     
     //__disable_irq();
-    //openSCwaveform(0, vco1wave);
+    //openSCwaveform(0, osc1wave);
     //__enable_irq();
     
     //if (HAL_ADC_PollForConversion(&g_AdcHandle, 1000000) == HAL_OK)
@@ -214,7 +249,7 @@ void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
   // read 1200 (samplelength = 600 2's complement)
   //char* theFilename = printf("0:single%d.wav", filenameID);
   char theFilename[] = "";
-  sprintf(theFilename, "0:AKWF_01%02d.wav", filenameID);
+  sprintf(theFilename, "0:wt1%03d.wav", filenameID);
   f_close(&wavetable_file[SCwaveformID]);
   __disable_irq();
   uint16_t openresult = f_open(&wavetable_file[SCwaveformID], theFilename, FA_READ);
@@ -242,59 +277,262 @@ void openSCwaveform(uint16_t SCwaveformID, uint16_t filenameID) {
   // 2's-complement signed integers -> short (-32k -> +32k) -> float (-1 -> +1)
   for (int j=0; j < 1200; j=j+2) {
 
-    // // to short
-//     // read 2 values for 2's-complement
-//     // convert to 1 short value
-         short tempshort = (short)(audioBufferFile[0][j+1]<<8 | ((audioBufferFile[0][j]) & 0xFF));
-//
-//     // to float
-//     // use j/2 because of conversion from 2's comp to short
-//          float ab = (float)tempshort/32768.f;
-//          f_wavetable[SCwaveformID][j/2] = ab + 1;//1000.f;
-       f_wavetable[SCwaveformID][j/2] = (float)(tempshort/32768.f);
-//
-    // // fill drawtable with 120 value
-             if(j%10==0) {
-                   d_wavetable[SCwaveformID][dt_int] = ((tempshort + 32768) / 656);
-                            dt_int++;
-                          }
+    // to short
+    // read 2 values for 2's-complement
+    // convert to 1 short value
+    short tempshort = (short)(audioBufferFile[0][j+1]<<8 | ((audioBufferFile[0][j]) & 0xFF));
+
+    // to float
+    // use j/2 because of conversion from 2's comp to short
+    f_wavetable[SCwaveformID][j/2] = (float)(tempshort/32768.f);
+
+    // fill drawtable with 120 value
+    if(j%10==0) {
+      d_wavetable[SCwaveformID][dt_int] = ((tempshort + 32768) / 656);
+      dt_int++;
+    }
   }
+}
+
+void initAudio() {
+    if (BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, VOLUME, SAMPLE_RATE) != 0) {
+      BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"initAudio error", LEFT_MODE);
+      Error_Handler();
+    }
+    
+    BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
+    BSP_AUDIO_OUT_SetVolume(VOLUME);
+    BSP_AUDIO_OUT_Play((uint16_t *)audioOutBuf, AUDIO_DMA_BUFFER_SIZE);
+
+}
+
+void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
+  HAL_DMA_IRQHandler(haudio_out_sai.hdmatx);
+}
+
+void BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
+  // clear global buffer
+  memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
+	computeAudio();
+	memcpy(audioOutBuf, int_bufProcessedOut, AUDIO_DMA_BUFFER_SIZE2);  
+}
+
+void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
+  memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
+	computeAudio();
+	memcpy(&audioOutBuf[AUDIO_DMA_BUFFER_SIZE2], int_bufProcessedOut, AUDIO_DMA_BUFFER_SIZE2);
+  
+  BSP_LED_Toggle(LED_GREEN);
+}
+
+void computeAudio() {
+  
+  // compute 2048 samples -> 512 audiosamples
+  for(int i = 0; i < 1024; i+=2) {
+    SPFLOAT tmp1 = 0, tmp2=0, tadsr_out = 0, mixOut;
+    
+    sp_osc_compute(sp, osc, NULL, &tmp1);
+    sp_osc_compute(sp, osc2, NULL, &tmp2);
+    sp_tadsr_compute(sp, tadsr, &adsr_trig, &tadsr_out);
+    
+    mixOut = (tadsr_out * (0.5 * tmp1 + 0.5 * tmp2));
+
+    // channel outputs in 2's comp / signed int
+    int_bufProcessedOut[i] = (mixOut * 32767);
+    int_bufProcessedOut[i+1] = (mixOut * 32767);
+    
+    // reset trig
+    adsr_trig = 0;
+    }
+}
+
+void drawTemplate(char potfunctions[25], char pagetitle[20]) {
+  BSP_LCD_Clear(LCD_COLOR_BLACK);
+
+  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_SetFont(&Font20);
+  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)pagetitle, LEFT_MODE);
+  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"wakefield  m", RIGHT_MODE);
+  BSP_LCD_DrawHLine(0,25,480);
+  BSP_LCD_DrawHLine(0,26,480);
+  BSP_LCD_SetFont(&Font20);
+  BSP_LCD_DisplayStringAt(65, 255, (uint8_t *)potfunctions, LEFT_MODE);
+  BSP_LCD_DrawHLine(0,248,480);
+  BSP_LCD_DrawHLine(0,249,480);
+  
+  BSP_LCD_FillRect(0,232,40,40);
+  BSP_LCD_FillRect(440,232,40,40);
+}
+
+void drawVoiceInterface(uint8_t voice) {
+  drawTemplate("vol1   vol2   vol3   main", "voice 1: WAVES");
+  if(voice==1) {
+    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
+    BSP_LCD_FillRect(10,50,140,110);
+    BSP_LCD_FillRect(10,166,67,55);
+    BSP_LCD_FillRect(83,166,67,55);
+    
+    BSP_LCD_FillRect(160,50,140,110);
+    BSP_LCD_FillRect(310,50,140,110);
+    
+    drawWavetable(0,20,155);
+    drawWavetable(1,170,155);
+  }
+}
+
+void drawWaveSelector() {  
+  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+  BSP_LCD_FillRect(10,30,460,237);
+  BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
+  BSP_LCD_FillRect(12,32,456,233);
+  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  
+  uint8_t wavetableID = startwave; 
+  for (int row=0; row < 3; row++) {
+    for (int col=1; col < 6; col++) {    
+      drawWavetableSmall(wavetableID,(col*70)+5,45+(row*70));
+      wavetableID++;
+    } 
+  }
+  
+  // page indicator
+  BSP_LCD_SetBackColor(LCD_COLOR_DARKBLUE);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+  BSP_LCD_SetFont(&Font12);
+  char a[] = "";
+  sprintf(a, "page %d", (startwave/15)+1);
+  BSP_LCD_DisplayStringAt(20, 40, (uint8_t *)a, LEFT_MODE);
+  
+  BSP_LCD_DisplayStringAt(20, 145, (uint8_t *)"<<", LEFT_MODE);
+  BSP_LCD_DisplayStringAt(445, 145, (uint8_t *)">>", LEFT_MODE);
 }
 
 void drawWavetable(uint16_t wavetableID, uint16_t x, uint16_t starty) {
   //uint16_t x = xstart;
   //uint16_t starty = ystart;
-  uint16_t y=starty-d_wavetable[wavetableID][119];
+  uint16_t y=starty-d_wavetable[wavetableID][0];
   for(int i = 0; i < 120; i++) {
     BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    BSP_LCD_DrawLine(x,y,x+1,starty-d_wavetable[wavetableID][119-i]);
+    BSP_LCD_DrawLine(x,y,x+1,starty-d_wavetable[wavetableID][i]);
     x++;
-    y=starty-d_wavetable[wavetableID][119-i];
+    y=starty-d_wavetable[wavetableID][i];
   }
 }
 
 
 
 void drawWavetableSmall(uint16_t wavetableID, uint16_t x, uint16_t starty) {
-  //uint16_t x = xstart;
-  //uint16_t starty = ystart;
-  // uint16_t y=(starty-d_wavetable[wavetableID][119])/3;
-//   for(int i = 0; i < 120; i=i+3) {
-//     BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-//     BSP_LCD_DrawLine(x,y,x+1,((starty-d_wavetable[wavetableID][119-i])/3)+1);
-//     x++;
-//     y=((starty-d_wavetable[wavetableID][119-i])/3)+1;
-//   }
-  
-  uint16_t y = starty + 5 + 50 - sswave[wavetableID][49];
-  //uint16_t x = x + 5;
+  uint16_t y = starty + 5 + 50 - sswave[wavetableID][0];
   for (int j=1; j < 50; j++) {
-    BSP_LCD_DrawLine(x,y,x+1,starty + 5 + 50 - sswave[wavetableID][49-j]);
+    BSP_LCD_DrawLine(x,y,x+1,starty + 5 + 50 - sswave[wavetableID][j]);
     x++;
-    y = starty + 5 + 50 - sswave[wavetableID][49-j];
+    y = starty + 5 + 50 - sswave[wavetableID][j];
   }
 }
 
+
+
+// Interrupt handler shared between:
+// SD_DETECT pin, USER_KEY button and touch screen interrupt
+void EXTI15_10_IRQHandler(void) {
+  if (__HAL_GPIO_EXTI_GET_IT(SD_DETECT_PIN) != RESET) {
+    HAL_GPIO_EXTI_IRQHandler(SD_DETECT_PIN | TS_INT_PIN);
+  } else {
+    // User button event or Touch screen interrupt
+    HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
+  }
+}
+
+// void HAL_GPIO_EXTI_IRQHandler points to this:
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+		
+	BSP_TS_GetState(&rawTouchState);
+	while (rawTouchState.touchDetected) {
+    
+    if (runOnce == 0) {
+      runOnce = 1;
+      
+      uint16_t touchx = rawTouchState.touchX[0];
+      uint16_t touchy = rawTouchState.touchY[0];
+      
+      if (strcmp(touchMap,"main")==0) {
+              // voice 1
+              // 10,50,140,110
+              if(touchx > 10 && touchx < 150 && touchy > 50 && touchy < 160) {
+                //currentVoiceInEdit = 1;
+                //drawInterface();
+                varToUpdate = &osc1wave;
+                waveformToUpdate = 0;
+                touchMap = "waveselect";
+                drawWaveSelector();
+              }
+              //160,50,140,110
+              if(touchx > 160 && touchx < 300 && touchy > 50 && touchy < 160) {
+                //currentVoiceInEdit = 1;
+                //drawInterface();
+                varToUpdate = &osc2wave;
+                waveformToUpdate = 1;
+                touchMap = "waveselect";
+                drawWaveSelector();
+              }
+            }
+        
+            else if (strcmp(touchMap,"waveselect")==0) {
+              
+              int8_t wavetableID = 0;
+              if(touchx<75) {
+                startwave = startwave - 15;
+                if(startwave < 0) {startwave=0;}
+                drawWaveSelector();
+                //break;
+              }
+              if(touchx>405) {
+                startwave = startwave + 15;
+                if(startwave > 180) {startwave=180;}
+                drawWaveSelector();
+                //break;
+              }
+              for (int row=0; row < 3; row++) {
+                for (int col=1; col < 6; col++) {
+                  if(touchx > ((col*70)+5) && touchx < ((col*70)+5+50) && touchy > (45+(row*70)) && touchy < (45+50+(row*70))) {
+                    // touch event on wavetable, open this one
+                    openSCwaveform(waveformToUpdate, startwave + wavetableID);
+                    // and copy contents to wavetable ftbl
+                    sp_gen_copy(sp,ft[waveformToUpdate],f_wavetable[waveformToUpdate]);
+                    // set osc var to new id
+                    *varToUpdate = startwave + wavetableID;
+                  
+                    touchMap = "main";
+                    drawVoiceInterface(1);
+                    break;
+                  } 
+                  wavetableID++;
+                } 
+              }
+            }
+    }
+	  // read state and continue with while
+	  BSP_TS_GetState(&rawTouchState);
+	} // end while
+  // reset touchloop for next time
+  runOnce=0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Stuff that should be in external files ;)
 
 void ConfigureADC()
 {
@@ -450,282 +688,3 @@ void ADC_IRQHandler()
 {
     HAL_ADC_IRQHandler(&g_AdcHandle);
 }
-
-void initAudio() {
-    if (BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, VOLUME, SAMPLE_RATE) != 0) {
-      BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"initAudio error", LEFT_MODE);
-      Error_Handler();
-    }
-    
-    BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
-    BSP_AUDIO_OUT_SetVolume(VOLUME);
-    BSP_AUDIO_OUT_Play((uint16_t *)audioOutBuf, AUDIO_DMA_BUFFER_SIZE);
-
-}
-
-void AUDIO_OUT_SAIx_DMAx_IRQHandler(void) {
-  HAL_DMA_IRQHandler(haudio_out_sai.hdmatx);
-}
-
-void BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
-  // clear global buffer
-  memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
-	computeAudio();
-	memcpy(audioOutBuf, int_bufProcessedOut, AUDIO_DMA_BUFFER_SIZE2);  
-}
-
-void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
-  memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
-	computeAudio();
-	memcpy(&audioOutBuf[AUDIO_DMA_BUFFER_SIZE2], int_bufProcessedOut, AUDIO_DMA_BUFFER_SIZE2);
-  
-  BSP_LED_Toggle(LED_GREEN);
-}
-
-void computeAudio() {
-  
-  // compute 2048 samples -> 512 audiosamples
-  for(int i = 0; i < 1024; i+=2) {
-    SPFLOAT tmp = 0, tmp2=0, tmp3=0, tmp4=0, tmp5=0, tmp6=0, mixOut;
-    
-    if(process_audio==1) {
-    
-    sp_osc_compute(sp, osc, NULL, &tmp);
-    sp_osc_compute(sp, osc2, NULL, &tmp3);
-    
-    mixOut = (0 * tmp3 + 0.5 * tmp);
-    
-    } else {
-     mixOut = 0;
-    }
-
-    // channel outputs in 2's comp / signed int
-    int_bufProcessedOut[i] = (mixOut * 32767);
-    int_bufProcessedOut[i+1] = (mixOut * 32767);
-  
-    }
-}
-
-void drawTemplate(char potfunctions[25], char pagetitle[20]) {
-  BSP_LCD_Clear(LCD_COLOR_BLACK);
-
-  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
-	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetFont(&Font20);
-  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)pagetitle, LEFT_MODE);
-  BSP_LCD_DisplayStringAt(5, 5, (uint8_t *)"wakefield  m", RIGHT_MODE);
-  BSP_LCD_DrawHLine(0,25,480);
-  BSP_LCD_DrawHLine(0,26,480);
-  BSP_LCD_SetFont(&Font20);
-  BSP_LCD_DisplayStringAt(65, 255, (uint8_t *)potfunctions, LEFT_MODE);
-  BSP_LCD_DrawHLine(0,248,480);
-  BSP_LCD_DrawHLine(0,249,480);
-  
-  BSP_LCD_FillRect(0,232,40,40);
-  BSP_LCD_FillRect(440,232,40,40);
-}
-
-void drawVoiceInterface(uint8_t voice) {
-  drawTemplate("vol1   vol2   vol3   main", "voice 1: WAVES");
-  if(voice==1) {
-    BSP_LCD_SetTextColor(LCD_COLOR_LIGHTBLUE);
-    BSP_LCD_FillRect(10,50,140,110);
-    BSP_LCD_FillRect(10,166,67,55);
-    BSP_LCD_FillRect(83,166,67,55);
-    
-    BSP_LCD_FillRect(160,50,140,110);
-    BSP_LCD_FillRect(310,50,140,110);
-    
-    drawWavetable(0,20,155);
-  }
-}
-
-void drawWaveSelector() {  
-  BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  BSP_LCD_FillRect(10,30,460,237);
-  BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);
-  BSP_LCD_FillRect(12,32,456,233);
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  
-  uint8_t wavetableID = 0; 
-  for (int row=0; row < 3; row++) {
-    for (int col=1; col < 6; col++) {    
-      drawWavetableSmall(wavetableID,(col*70)+5,45+(row*70));
-      wavetableID++;
-    } 
-  }
-  
-  
-  //__disable_irq();
-  //openSCwaveform(1,1);
-  //__enable_irq();
-  //BSP_LCD_SetTextColor(LCD_COLOR_RED);
-  //BSP_LCD_FillRect(12,12,456,20);
-  
-  //BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-  //BSP_LCD_SetBackColor(LCD_COLOR_RED);
-  //BSP_LCD_SetFont(&Font12);
-  //BSP_LCD_DisplayStringAt(17, 17, (uint8_t *)"Select wave", LEFT_MODE);
-  
-  // 18 waves available sofar
-  // int8_t sid = 0;
-//   for (int row=0; row < 3; row++) {
-//     for (int col=0; col < 6; col++) {
-//       drawSSample(sid, 20 + col * 70 , 40 + 75 * row );
-//       sid++;
-//     }
-//   }
-}
-
-
-// Interrupt handler shared between:
-// SD_DETECT pin, USER_KEY button and touch screen interrupt
-void EXTI15_10_IRQHandler(void) {
-  if (__HAL_GPIO_EXTI_GET_IT(SD_DETECT_PIN) != RESET) {
-    HAL_GPIO_EXTI_IRQHandler(SD_DETECT_PIN | TS_INT_PIN);
-  } else {
-    // User button event or Touch screen interrupt
-    HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
-  }
-}
-
-// void HAL_GPIO_EXTI_IRQHandler points to this:
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-		
-	BSP_TS_GetState(&rawTouchState);
-	while (rawTouchState.touchDetected) {
-    
-    if (runOnce == 0) {
-      runOnce = 1;
-      
-      uint16_t touchx = rawTouchState.touchX[0];
-      uint16_t touchy = rawTouchState.touchY[0];
-      
-      if (strcmp(touchMap,"main")==0) {
-              // voice 1
-              // 10,50,140,110
-              if(touchx > 10 && touchx < 150 && touchy > 50 && touchy < 160) {
-                //currentVoiceInEdit = 1;
-                //drawInterface();
-                touchMap = "waveselect";
-                drawWaveSelector();
-              }
-            }
-        
-            else if (strcmp(touchMap,"waveselect")==0) {
-              
-              int8_t wavetableID = 0;
-              for (int row=0; row < 3; row++) {
-                for (int col=1; col < 6; col++) {
-                  if(touchx > ((col*70)+5) && touchx < ((col*70)+5+50) && touchy > (45+(row*70)) && touchy < (45+50+(row*70))) {
-                    // touch event on wavetable, open this one
-                    openSCwaveform(0, wavetableID+1);
-                    // and copy contents to wavetable ftbl
-                    sp_gen_copy(sp,ft[0],f_wavetable[0]);
-                  
-                    touchMap = "main";
-                    drawVoiceInterface(1);
-                    break;
-                  } 
-                  wavetableID++;
-                } 
-              }
-            }
-    }
-	  // read state and continue with while
-	  BSP_TS_GetState(&rawTouchState);
-	} // end while
-  // reset touchloop for next time
-  runOnce=0;
-}
-                    // voice 1
-                    // 10,50,140,110
-                                  //if(touchx > 0 && touchx < 300 && touchy > 0 && touchy < 160) {
-                      //currentVoiceInEdit = 1;
-                      //drawInterface();
-                      //touchMap = "waveselect";
-                      //process_audio = 0;
-                      //__disable_irq();
-                      
-                                  // openSCwaveform(0, 3);
- //                                 sp_gen_copy(sp,ft[0],f_wavetable[0]);
-                      
-                      //sf_readf_float(audioBufferFile[0], ft[0]->tbl, ft[0]->size);
-                      
-                      //memset(ft[0]->tbl,0,600);
-                      //memset(int_bufProcessedOut, 0, sizeof int_bufProcessedOut);
-                      
-                      // sp_osc_destroy(&osc);
-                      // sp_osc_create(&osc);
-                      //
-                      // sp_osc_init(sp, osc, ft[0], 0);
-                      // osc->freq = 200;
-                      // osc->amp = 0.5;
-                      
-                      // sp_osc_create(&osc);
-                      // sp_osc_create(&osc2);
-                      //
-                      // sp_osc_init(sp, osc, ft[0], 0);
-                      // osc->freq = 200;
-                      // osc->amp = 0.5;
-                      
-                      //  process_audio=0;
-                      // for(int i = 0; i < 600; i++){
-                      //   work->tbl[i] = f_wavetable[0][i];
-                      // }
-                      //                        process_audio=1;
-                      //__enable_irq();
-                      // sp_osc_init(sp, osc, ft[0], 0);
-                      // osc->freq = 200;
-                      // osc->amp = 0.5;
-                      //process_audio = 1;
-
-                      
-
-		// run once on (continues) touch
-//	  if (runOnce == 0) {
-//
-      
-
-  //    runOnce = 1;
-//
-//       uint16_t touchx = rawTouchState.touchX[0];
-//       uint16_t touchy = rawTouchState.touchY[0];
-//
-//       // determine and handle current touchMap
-//       if (strcmp(touchMap,"main")==0) {
-//         // voice 1
-//         // 10,50,140,110
-//         if(touchx > 10 && touchx < 150 && touchy > 50 && touchy < 160) {
-//           //currentVoiceInEdit = 1;
-//           //drawInterface();
-//           touchMap = "waveselect";
-//           drawWaveSelector();
-//         }
-//       }
-//
-//       if (strcmp(touchMap,"waveselect")==0) {
-//         // voice 1
-//         // 10,50,140,110
-//         if(touchx > 0 && touchx < 300 && touchy > 0 && touchy < 160) {
-//           //currentVoiceInEdit = 1;
-//           //drawInterface();
-//           //touchMap = "waveselect";
-//           //process_audio = 0;
-//           openSCwaveform(0, 2);
-//
-//           // for(int i = 0; i < ft[0]->size; i++){
-// //              ft[0]->tbl[i] = f_wavetable[0][i];
-// //           }
-//           // sp_osc_init(sp, osc, ft[0], 0);
-//           // osc->freq = 200;
-//           // osc->amp = 0.5;
-//           //process_audio = 1;
-//
-//           touchMap = "main";
-//           drawVoiceInterface(1);
-//         }
-//       }
-//
-//     }

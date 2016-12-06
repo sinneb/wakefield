@@ -1,4 +1,10 @@
 import wave, struct, sys
+import glob, os
+
+for file in os.listdir("/"):
+    if file.endswith(".wav"):
+        print(file)
+
 waveFile = wave.open(sys.argv[1],'r')
 length = waveFile.getnframes()
 arrWave = []
