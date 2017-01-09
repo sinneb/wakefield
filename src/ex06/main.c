@@ -4,6 +4,7 @@
 #include "adsr.h"
 #include "biquad.h"
 #include "delay.h"
+#include "4pole.h"
 #include "node_ops.h"
 #include "osc.h"
 #include "panning.h"
@@ -78,7 +79,7 @@ static void init_voice(CTSS_Synth *synth, CTSS_DSPStack *stack) {
   CTSS_DSPNode *osc2 = ctss_osc("osc2", ctss_process_osc_sawsin, 0, 0, 0.22f, 0);
   CTSS_DSPNode *sum  = ctss_op4("sum", osc1, env, osc2, env, ctss_process_madd);
   CTSS_DSPNode *filter =
-      ctss_filter_biquad("filter", LPF, sum, 1000.0f, 0.0f, 0.5f);
+      ctss_filter_4pole("filter", sum, 0, 1000.0f, 0.0f, 0.5f);
   CTSS_DSPNode *pan = ctss_panning("pan", filter, synth->lfo[1], 0.0f);
   CTSS_DSPNode *delay =
       ctss_delay("delay", pan, (uint32_t)(SAMPLE_RATE * 0.125f), 0.6f, 2);

@@ -148,12 +148,12 @@ BSP_LCD_Clear(LCD_COLOR_DARKMAGENTA);
     //        {
         //        g_ADCValue = HAL_ADC_GetValue(&g_AdcHandle);
       //          g_MeasurementNumber++;
-               // char a[] = "";
- //                uint32_t digu = (uint32_t)(ADCchannelValues[0]);
- //              //uint16_t newval = g_ADCValue - (uint16_t)*blsaw->freq;
- //                      sprintf(a, "%ld", digu);
- //                                      BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
- //                                                             osc->freq=(ADCchannelValues[0] / 10);
+               char a[] = "";
+                uint32_t digu = (uint32_t)(ADCchannelValues[0]);
+              //uint16_t newval = g_ADCValue - (uint16_t)*blsaw->freq;
+                      sprintf(a, "%ld", digu);
+                                      BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+              //                                    osc->freq=(ADCchannelValues[0] / 10);
  //    // //     }
  //                                //if(g_ADCValue>1000) {
                                 //  *blsaw->freq = g_ADCValue;
@@ -299,6 +299,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
         if(abs(ADCchannelValues[2]-channels[2])>1) {ADCchannelValues[2] = channels[2];}
         if(abs(ADCchannelValues[3]-channels[3])>1) {ADCchannelValues[3] = channels[3];}
       
+      
+      BSP_LED_Toggle(LED_GREEN);
         //g_ADCValue = ADCchannelValues[2];
       
       //g_ADCValue = g_ADCBuffer[2];//std::accumulate(g_ADCBuffer, g_ADCBuffer + ADC_BUFFER_LENGTH, 0) / ADC_BUFFER_LENGTH;

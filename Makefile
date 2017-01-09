@@ -88,11 +88,12 @@ C_OBJ += $(addprefix $(BUILD_DIR)/, $(notdir $(ALL_SRC:.c=.o)))
 DEPS += $(ASM_OBJ:.o=.d) $(C_OBJ:.o=.d)
 
 LIBS += -lm -lsoundpipe
+LIBS += -larm_cortexM7lfsp_math
 
 CFLAGS += -std=c11 -fsigned-char -ffunction-sections -fdata-sections -Wall
 CFLAGS += -DNO_LIBSNDFILE 
 
-LD_FLAGS += -Lmake/devices -L$(LIB_DIR)
+LD_FLAGS += -Lmake/devices -L$(LIB_DIR) -L/Users/Arthur/arm/STM32Cube_FW_F7_V1.4.0/Drivers/CMSIS/Lib/GCC
 LD_FLAGS += -Xlinker --gc-sections -Wl,-Map,$(BIN_DIR)/$(TARGET_NAME).map
 LD_FLAGS += -specs=nosys.specs -specs=nano.specs
 

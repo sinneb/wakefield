@@ -57,10 +57,10 @@ int sp_osc_compute(sp_data *sp, sp_osc *osc, SPFLOAT *in, SPFLOAT *out)
     
     //float arm_linear_interep_table[10]={0,2,4,6,8,10,12,14,16,18};
     // init linear interp instance
-    // with table length 2048, startpoint 0, steps 1 and datatable ft/ftp
+    // with table length 600, startpoint 0, steps 1 and datatable ft/ftp
     arm_linear_interp_instance_f32 S = {600, 0, 1, (float32_t *)&datatable[0]};
     
-    // 1 sine = 2048
+    // 1 sine = 600
     // freq = 440
     // sr = 48000
     

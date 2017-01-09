@@ -70,7 +70,7 @@ int sp_osc_compute(sp_data *sp, sp_osc *osc, SPFLOAT *in, SPFLOAT *out)
     // step = 600 / 109.1 = 18.77
     
     step = osc->inc + (600.0f/(sr/freq));
-    if(step>600){step=5;}  
+    if(step>600){step=step-600;}  
     *out = amp * (arm_linear_interp_f32(&S, step));
     osc->inc = step;
 
