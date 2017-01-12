@@ -26,7 +26,7 @@ wakefield synthesizer
 #include "arm_math.h"
 
 // defines
-#define VOLUME 70
+#define VOLUME 40
 #define SAMPLE_RATE 48000
 #define AUDIO_DMA_BUFFER_SIZE 4096  // divided by 4 (C array item length) reserves a stereo audio buffer of 1024 bytes
                                     // translating to 2x512 bytes mono
@@ -40,10 +40,12 @@ static sp_tadsr *tadsr[NBR_OF_VOICES];
 sp_osc *osc[32];
 SPFLOAT adsr_trig[NBR_OF_VOICES] = {0,0,0,0,0,0};
 static sp_ftbl *ft;
+sp_filts *filts;
 float oscSetFreq[32];
 
 uint8_t audioReady = 0;
 uint8_t activeOsc = 0;
+uint8_t player = 0;
 
 // audio buffers
 static int16_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
@@ -134,6 +136,12 @@ int main() {
   osc[3]->freq=0.1;
   osc[3]->amp=1;
   // fltr
+  // fltr
+  
+  sp_filts_create(&filts);
+  sp_filts_init(sp, filts);
+  filts->freq=1000;
+  filts->res=0;
   
   // sp_gain_create(&gain);
 //   sp_gain_init(sp, gain);
@@ -152,11 +160,26 @@ int main() {
   }
   
   while (1) {
-    //char a[] = "";
-    //sprintf(a, "%ld", (int32_t)(gain->freq));
-      // BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+    BSP_LED_Toggle(LED_GREEN);
+    char a[] = "";
+    sprintf(a, "%ld", HAL_GetTick());
+    BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
       
       //delay(10);
+    if(HAL_GetTick()%500==0) {
+      filts->res=0;
+      if(player==0) {
+        mididata[0] = 144; mididata[1] = 60; mididata[2] = 100;
+        handle_midi();
+        mididata[0] = 0; mididata[1] = -1; mididata[2] = -1;
+        player = 1;
+      } // else {
+//         mididata[0] = 144; mididata[1] = 60; mididata[2] = 0;
+//         handle_midi();
+//         mididata[0] = 0; mididata[1] = -1; mididata[2] = -1;
+//         player = 0;
+//       }    
+    }
   }
 
   return 0;
@@ -219,6 +242,7 @@ void computeAudio() {
   float oscbuf[32][1024];
   float oscmixdown[1024];
   float tadsr_out[NBR_OF_VOICES];
+  float filtout;
   
   for(int sampleit=0;sampleit<1024;sampleit+=2) {
     
@@ -232,6 +256,9 @@ void computeAudio() {
     // calculate 1 monosample for each oscillator for all voices, 6 voices * 4 osc = 24 
     for(int oscit=0; oscit<24; oscit++) {
       sp_osc_compute(sp, osc[oscit], NULL, &oscbuf[oscit][sampleit]);
+      
+      // apply filter settings
+      //sp_filts_compute(sp, filts, &oscbuf[oscit][sampleit], &filtout);
       
       // double the sample to generate "stereo"
       oscbuf[oscit][sampleit+1] = oscbuf[oscit][sampleit];
@@ -253,10 +280,36 @@ void computeAudio() {
   // multiply oscbuf[0] with oscbuf[2]
   //arm_mult_f32(oscbuf[0], oscbuf[2], oscbuf[0], 1024);
   
-  // add all buffers together
+  //add all buffers together
   for(int oscit=1; oscit<24; oscit++) {
     arm_add_f32(oscbuf[0],oscbuf[oscit],oscbuf[0],1024);
   }
+  
+  // filter resulting buffer oscbuf[0]
+  
+  // calculate filter coefs
+  sp_filts_compute_coeffs(sp, filts);
+  
+  int numStages=1;
+  int samples=512;
+
+  float32_t pCoeffs[5] = {0.0159660568168987, 0.0319321136337974, 0.0159660568168987, -1.9112261061185025, 0.9750903333860972};
+  float32_t pState[8];
+  //float32_t pSrc[512];
+  //float32_t pDst[512];// =  malloc(sizeof(float32_t) * samples);
+  
+  arm_biquad_casd_df1_inst_f32 S;
+  arm_biquad_cascade_df1_init_f32(&S, numStages, pCoeffs, pState);
+  
+  arm_biquad_cascade_df1_f32(&S, oscbuf[0], oscbuf[0], 1024);
+  
+  // calculate filter
+
+  // for(int sampleit=0;sampleit<1024;sampleit+=2) {
+  //   sp_filts_compute(sp, filts, &oscbuf[0][sampleit], &filtout);
+  //   oscbuf[0][sampleit] = filtout;
+  //   oscbuf[0][sampleit+1] = oscbuf[0][sampleit];
+  // }
   
   
   // first addition to populate oscmixdown

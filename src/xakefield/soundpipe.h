@@ -1529,13 +1529,14 @@ int sp_wpkorg35_destroy(sp_wpkorg35 **p);
 int sp_wpkorg35_init(sp_data *sp, sp_wpkorg35 *p);
 int sp_wpkorg35_compute(sp_data *sp, sp_wpkorg35 *p, SPFLOAT *in, SPFLOAT *out);
 
-typedef struct sp_gain{
-    double gain, in1, in2, in3, in4, out1, out2, out3, out4, oneOverSr, r, p2, k;
+typedef struct sp_filts{
+    SPFLOAT gain, in1, in2, in3, in4, out1, out2, out3, out4, oneOverSr, r, p2, k;
+    SPFLOAT a1,a2,a3,m0,m1,m2;
     float freq, res;
-} sp_gain;
+} sp_filts;
 
-int sp_gain_create(sp_gain **p);
-int sp_gain_destroy(sp_gain **p);
-int sp_gain_init(sp_data *sp, sp_gain *p);
-int sp_gain_compute_coeffs(sp_data *sp, sp_gain *p);
-int sp_gain_compute(sp_data *sp, sp_gain *p, SPFLOAT *in, SPFLOAT *out);
+int sp_filts_create(sp_filts **p);
+int sp_filts_destroy(sp_filts **p);
+int sp_filts_init(sp_data *sp, sp_filts *p);
+int sp_filts_compute_coeffs(sp_data *sp, sp_filts *p);
+int sp_filts_compute(sp_data *sp, sp_filts *p, SPFLOAT *in, SPFLOAT *out);
