@@ -51,6 +51,20 @@ uint8_t player = 0;
 static int16_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioOutBuf[AUDIO_DMA_BUFFER_SIZE];
 
+// filter buffers and instances
+int filt_numStages=1;
+int filt_samples=512;
+//float32_t pCoeffs[5] = {0.0159660568168987, 0.0319321136337974, 0.0159660568168987, -1.9112261061185025, 0.9750903333860972};
+//float32_t  pCoeffs[5] = {1.0f, -1.0f, 1.0f, 1.0f, -1.0f};
+//float32_t pCoeffs[5] = {0.9733553098104358, -1.9467106196208717, 0.9733553098104358, 1.9447880283614938, -0.9486332108802497};
+//float32_t pCoeffs[5] = {1,2,1,-1.1997,0.5157};
+//The coefficients are stored in the array <code>pCoeffs</code> in the following order:   
+//<pre>   
+//{b10, b11, b12, a11, a12, b20, b21, b22, a21, a22, ...}   
+float32_t pCoeffs[5] = {0.004249833583334715, 0.00849966716666943, 0.004249833583334715, 1.9700326795371683, -0.9870320138705072};
+float32_t pState[64];
+arm_biquad_cascade_df2T_instance_f32 S;
+
 // midi
 UART_HandleTypeDef uart_config;
 uint8_t midicounter=0;
@@ -143,6 +157,9 @@ int main() {
   filts->freq=1000;
   filts->res=0;
   
+  // init filter
+  arm_biquad_cascade_df2T_init_f32(&S, filt_numStages, (float32_t *)&pCoeffs[0], &pState[0]);
+  
   // sp_gain_create(&gain);
 //   sp_gain_init(sp, gain);
 //   gain->freq=0;
@@ -167,7 +184,7 @@ int main() {
       
       //delay(10);
     if(HAL_GetTick()%500==0) {
-      filts->res=0;
+      pCoeffs[0]+=0.001;
       if(player==0) {
         mididata[0] = 144; mididata[1] = 60; mididata[2] = 100;
         handle_midi();
@@ -239,12 +256,13 @@ void computeAudio() {
   // halfbuffer @ audiorate
   
   // 16 buffers with 1024 samples
-  float oscbuf[32][1024];
-  float oscmixdown[1024];
+  float32_t oscbuf[32][1024];
+  float32_t oscmixdown[1024];
   float tadsr_out[NBR_OF_VOICES];
   float filtout;
   
-  for(int sampleit=0;sampleit<1024;sampleit+=2) {
+  //for(int sampleit=0;sampleit<1024;sampleit+=2) {
+  for(int sampleit=0;sampleit<512;sampleit++) {
     
     for(int i = 0; i < NBR_OF_VOICES; i++) {
       // calculate voice ADSR
@@ -254,14 +272,14 @@ void computeAudio() {
     }
     
     // calculate 1 monosample for each oscillator for all voices, 6 voices * 4 osc = 24 
-    for(int oscit=0; oscit<24; oscit++) {
+    for(int oscit=0; oscit<2; oscit++) {
       sp_osc_compute(sp, osc[oscit], NULL, &oscbuf[oscit][sampleit]);
       
       // apply filter settings
       //sp_filts_compute(sp, filts, &oscbuf[oscit][sampleit], &filtout);
       
       // double the sample to generate "stereo"
-      oscbuf[oscit][sampleit+1] = oscbuf[oscit][sampleit];
+      //oscbuf[oscit][sampleit+1] = oscbuf[oscit][sampleit];
     }
 
     // handle ADSR's
@@ -281,30 +299,25 @@ void computeAudio() {
   //arm_mult_f32(oscbuf[0], oscbuf[2], oscbuf[0], 1024);
   
   //add all buffers together
-  for(int oscit=1; oscit<24; oscit++) {
-    arm_add_f32(oscbuf[0],oscbuf[oscit],oscbuf[0],1024);
+  for(int oscit=1; oscit<2; oscit++) {
+    arm_add_f32(oscbuf[0],oscbuf[oscit],oscbuf[0],512);
   }
   
   // filter resulting buffer oscbuf[0]
   
-  // calculate filter coefs
-  sp_filts_compute_coeffs(sp, filts);
-  
-  int numStages=1;
-  int samples=512;
-
-  float32_t pCoeffs[5] = {0.0159660568168987, 0.0319321136337974, 0.0159660568168987, -1.9112261061185025, 0.9750903333860972};
-  float32_t pState[8];
-  //float32_t pSrc[512];
-  //float32_t pDst[512];// =  malloc(sizeof(float32_t) * samples);
-  
-  arm_biquad_casd_df1_inst_f32 S;
-  arm_biquad_cascade_df1_init_f32(&S, numStages, pCoeffs, pState);
-  
-  arm_biquad_cascade_df1_f32(&S, oscbuf[0], oscbuf[0], 1024);
-  
+  // calculate filter 
+  arm_biquad_cascade_df2T_f32(&S, oscbuf[0], oscbuf[0], 512);
+//
   // calculate filter
 
+  // double array mono -> stereo
+  int counter = 0;
+  for(int sampleit=0;sampleit<1024;sampleit+=2) {
+    oscmixdown[sampleit] = oscbuf[0][counter];
+    oscmixdown[sampleit+1] = oscbuf[0][counter];
+    counter++;
+  }
+  
   // for(int sampleit=0;sampleit<1024;sampleit+=2) {
   //   sp_filts_compute(sp, filts, &oscbuf[0][sampleit], &filtout);
   //   oscbuf[0][sampleit] = filtout;
@@ -325,7 +338,7 @@ void computeAudio() {
   
   // convert float to q15 / int16
   // send to transferbuffer
-  arm_float_to_q15(oscbuf[0], int_bufProcessedOut, 1024);
+  arm_float_to_q15(oscmixdown, int_bufProcessedOut, 1024);
 
   // for(int i = 0; i < 1024; i+=2) {
 //     //SPFLOAT tmp3=0, tmp4=0, tmp[12], mixOut, gainout, oscmix;
