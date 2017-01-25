@@ -1530,8 +1530,8 @@ int sp_wpkorg35_init(sp_data *sp, sp_wpkorg35 *p);
 int sp_wpkorg35_compute(sp_data *sp, sp_wpkorg35 *p, SPFLOAT *in, SPFLOAT *out);
 
 typedef struct sp_filts{
-    SPFLOAT gain, in1, in2, in3, in4, out1, out2, out3, out4, oneOverSr, r, p2, k;
-    SPFLOAT a1,a2,a3,m0,m1,m2;
+    float gain, in1, in2, in3, in4, out1, out2, out3, out4, oneOverSr, r, p2, k;
+    float a1,a2,a3,m0,m1,m2;
     float freq, res;
 } sp_filts;
 

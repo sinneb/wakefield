@@ -21,7 +21,6 @@ EXT_SRC_DIR = ext
 LIB_DIR = lib
 BUILD_DIR = build/$(module)
 BIN_DIR = bin/$(module)
-GEN_DSP_DIR = src/$(module)/gen_dsp
 
 include make/devices/$(device).make
 
@@ -76,29 +75,23 @@ endif
 SYS_INCLUDES = $(CMSIS_INCLUDES) $(HAL_INCLUDES) $(BSP_INCLUDES) $(USBH_INCLUDES) $(FATFS_INCLUDES)
 SYS_SRC = $(CMSIS_SRC) $(HAL_SRC) $(BSP_SRC) $(LL_SRC) $(USBH_SRC) $(FATFS_SRC)
 
-USER_INCLUDES += -I$(USER_SRC_DIR) -Iext -I$(GEN_DSP_DIR)
-USER_SRC += $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c) $(wildcard $(GEN_DSP_DIR)/*.c)
-USER_CPP_SRC += $(wildcard $(USER_SRC_DIR)/common/*.cpp) $(wildcard $(USER_SRC_DIR)/$(module)/*.cpp) $(wildcard $(GEN_DSP_DIR)/*.cpp)
+USER_INCLUDES += -I$(USER_SRC_DIR) -Iext
+USER_SRC += $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c)
 
 ALL_INCLUDES = $(USER_INCLUDES) $(SYS_INCLUDES)
 ALL_SRC = $(SYS_SRC) $(USER_SRC)
-ALL_CPP_SRC = $(USER_CPP_SRC)
 
 ASM_OBJ = $(addprefix $(BUILD_DIR)/, $(notdir $(ASM_SRC:.s=.o)))
 
 C_OBJ += $(addprefix $(BUILD_DIR)/, $(notdir $(ALL_SRC:.c=.o)))
-CPP_OBJ += $(addprefix $(BUILD_DIR)/, $(notdir $(ALL_CPP_SRC:.cpp=.o)))
 
-DEPS += $(ASM_OBJ:.o=.d) $(C_OBJ:.o=.d) $(CPP_OBJ:.o=.d)
+DEPS += $(ASM_OBJ:.o=.d) $(C_OBJ:.o=.d)
 
-LIBS += -lm -lsoundpipe -lstdc++
+LIBS += -lm -lsoundpipe
 LIBS += -larm_cortexM7lfsp_math
 
 CFLAGS += -std=c11 -fsigned-char -ffunction-sections -fdata-sections -Wall
 CFLAGS += -DNO_LIBSNDFILE 
-
-CPPFLAGS += -std=c++11 -fsigned-char -ffunction-sections -fdata-sections -Wall
-CPPFLAGS += -DNO_LIBSNDFILE 
 
 LD_FLAGS += -Lmake/devices -L$(LIB_DIR) -L/Users/Arthur/arm/STM32Cube_FW_F7_V1.4.0/Drivers/CMSIS/Lib/GCC
 LD_FLAGS += -Xlinker --gc-sections -Wl,-Map,$(BIN_DIR)/$(TARGET_NAME).map
@@ -120,7 +113,7 @@ $(BIN_DIR):
 	@echo Creating $(BIN_DIR)
 	@mkdir -p $(BIN_DIR)
 
-$(TARGET_ELF): $(CPP_OBJ) $(C_OBJ)  $(ASM_OBJ)
+$(TARGET_ELF): $(C_OBJ) $(ASM_OBJ)
 	@echo Linking target: $(TARGET_ELF)
 	$(CC) $(CFLAGS) $(LD_FLAGS) -o $@ $^ $(LIBS)
 
@@ -137,11 +130,6 @@ $(C_OBJ): %.o : $$(filter $$(PERCENT)/$$(notdir %).c, $(ALL_SRC))
 	@echo $(CC) $(DEFINES) $(ALL_INCLUDES) $(CFLAGS) -o $@ -c $< -MMD -MP -MF "$(@:%.o=%.d)"
 	@$(CC) $(DEFINES) $(ALL_INCLUDES) $(CFLAGS) -o $@ -c $< -MMD -MP -MF "$(@:%.o=%.d)"
 
-$(CPP_OBJ): %.o : $$(filter $$(PERCENT)/$$(notdir %).cpp, $(ALL_CPP_SRC))
-	@echo compiling cpp: $(notdir $<)
-	@echo $(LD) $(DEFINES) $(ALL_INCLUDES) $(CPPFLAGS) -o $@ -c $< -MMD -MP -MF "$(@:%.o=%.d)"
-	@$(LD) $(DEFINES) $(ALL_INCLUDES) $(CPPFLAGS) -o $@ -c $< -MMD -MP -MF "$(@:%.o=%.d)"
-
 $(ASM_OBJ): %.o : $$(filter $$(PERCENT)/$$(notdir %).s, $(ASM_SRC))
 	@echo assembling: $(notdir $<)
 	@$(CC) $(DEFINES) $(ALL_INCLUDES) $(CFLAGS) -o $@ -c $< -MMD -MP -MF "$(@:%.o=%.d)"
@@ -153,12 +141,6 @@ $(ASM_OBJ): %.o : $$(filter $$(PERCENT)/$$(notdir %).s, $(ASM_SRC))
 clean:
 	@echo Cleaning...
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
-	
-cpp:
-	@echo Make CPP...
-	@echo $(CPP_OBJ)
-	@echo -
-	@echo $(ALL_CPP_SRC)
 
 trace:
 	@echo SRC_FILTER: $(SRC_FILTER)

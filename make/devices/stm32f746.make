@@ -7,6 +7,7 @@ BSP_DIR = $(STM_SRC_ROOT)/BSP/STM32746G-Discovery
 DEFINES += -DSTM32F746xx -DUSE_STM32746G_DISCO
 
 CFLAGS += -mthumb -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-sp-d16
+CPPFLAGS += -mthumb -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-sp-d16
 LD_FLAGS += -Tstm32f746.ld
 
 ASM_SRC += $(DEVICE_DIR)/Source/Templates/gcc/startup_stm32f746xx.s

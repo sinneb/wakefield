@@ -26,8 +26,8 @@ wakefield synthesizer
 #include "arm_math.h"
 
 // defines
-#define VOLUME 40
-#define SAMPLE_RATE 48000
+#define VOLUME 70
+#define SAMPLE_RATE 24000
 #define AUDIO_DMA_BUFFER_SIZE 4096  // divided by 4 (C array item length) reserves a stereo audio buffer of 1024 bytes
                                     // translating to 2x512 bytes mono
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
@@ -46,6 +46,9 @@ float oscSetFreq[32];
 uint8_t audioReady = 0;
 uint8_t activeOsc = 0;
 uint8_t player = 0;
+//float qvalue = 5;
+float filterfreq = 1000;
+float filterq = 0.5;
 
 // audio buffers
 static int16_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
@@ -60,8 +63,9 @@ int filt_samples=512;
 //float32_t pCoeffs[5] = {1,2,1,-1.1997,0.5157};
 //The coefficients are stored in the array <code>pCoeffs</code> in the following order:   
 //<pre>   
-//{b10, b11, b12, a11, a12, b20, b21, b22, a21, a22, ...}   
-float32_t pCoeffs[5] = {0.004249833583334715, 0.00849966716666943, 0.004249833583334715, 1.9700326795371683, -0.9870320138705072};
+//{b10, b11, b12, a11, a12, b20, b21, b22, a21, a22, ...}
+   
+float32_t pCoeffs[10] = {0.004249833583334715, 0.00849966716666943, 0.004249833583334715, 1.9700326795371683, -0.9870320138705072};
 float32_t pState[64];
 arm_biquad_cascade_df2T_instance_f32 S;
 
@@ -79,6 +83,7 @@ void initAudio();
 void computeAudio();
 void UART6_Config();
 void handle_midi();
+void calcCoeffs();
 
 
 int main() {
@@ -109,7 +114,7 @@ int main() {
   BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"xakefield", CENTER_MODE);
   
   sp_create(&sp);
-  sp->sr = 48000;
+  sp->sr = 24000;
   
   sp_ftbl_create(sp, &ft, 600);
   
@@ -140,7 +145,7 @@ int main() {
 
     sp_osc_init(sp, osc[i], ft, 0);
     osc[i]->freq = 220 + (40*i);
-    osc[i]->amp = 0.5;
+    osc[i]->amp = 0.9;
     oscSetFreq[i] = osc[i]->freq;
   }
   
@@ -154,10 +159,30 @@ int main() {
   
   sp_filts_create(&filts);
   sp_filts_init(sp, filts);
-  filts->freq=1000;
-  filts->res=0;
+  filts->freq=500;
+  filts->res=0.5;
   
   // init filter
+  float freq = 1000.0f;
+  float Q = 5.6f;
+  float samplerate = 24000.0f;
+  float K = tan(3.1415926535897932f * freq / samplerate);
+  float norm = 1.0f / (1.0f + K / Q + K * K);
+  //float 
+  //float myFloat = 0.1;
+  
+  pCoeffs[0] = K * K * norm;                  //a0
+  pCoeffs[1]= 2 * pCoeffs[0];                 //a1
+  pCoeffs[2] = pCoeffs[0];                    //a2
+  pCoeffs[3] = 2 * (K * K - 1) * -norm;        //b1 (negated)
+  pCoeffs[4] = (1 - K / Q + K * K) * -norm;    //b2 (negated)
+  
+  pCoeffs[5] = pCoeffs[0];
+  pCoeffs[6] = pCoeffs[1];
+  pCoeffs[7] = pCoeffs[2];
+  pCoeffs[8] = pCoeffs[3];
+  pCoeffs[9] = pCoeffs[4];
+  
   arm_biquad_cascade_df2T_init_f32(&S, filt_numStages, (float32_t *)&pCoeffs[0], &pState[0]);
   
   // sp_gain_create(&gain);
@@ -176,27 +201,41 @@ int main() {
     tadsr[i]->rel = 0.8;
   }
   
+  float32_t dotprod_tst_a[4] = {2,5};
+  float32_t dotprod_tst_b[4] = {5,1};
+  float32_t result;
+  arm_dot_prod_f32(dotprod_tst_a, dotprod_tst_b,2,&result);
+
   while (1) {
+    //filts->freq+=0.5;
+    //filts->res=filts->res-0.00001;
+    
     BSP_LED_Toggle(LED_GREEN);
     char a[] = "";
-    sprintf(a, "%ld", HAL_GetTick());
+    //sprintf(a, "%d", (int)filterfreq);
+    sprintf(a, "%d", (int)HAL_GetTick());
+    //sprintf(a, "%d", (int)result*1000);
     BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+    
+    sprintf(a, "%d", (int)filts->freq);
+    BSP_LCD_DisplayStringAt(50, 100, (uint8_t *)a, LEFT_MODE);
+    
       
       //delay(10);
     if(HAL_GetTick()%500==0) {
-      pCoeffs[0]+=0.001;
+      
       if(player==0) {
         mididata[0] = 144; mididata[1] = 60; mididata[2] = 100;
         handle_midi();
         mididata[0] = 0; mididata[1] = -1; mididata[2] = -1;
         player = 1;
-      } // else {
-//         mididata[0] = 144; mididata[1] = 60; mididata[2] = 0;
-//         handle_midi();
-//         mididata[0] = 0; mididata[1] = -1; mididata[2] = -1;
-//         player = 0;
-//       }    
-    }
+      }// else {
+// //         mididata[0] = 144; mididata[1] = 60; mididata[2] = 0;
+// //         handle_midi();
+// //         mididata[0] = 0; mididata[1] = -1; mididata[2] = -1;
+// //         player = 0;
+// //       }
+      }
   }
 
   return 0;
@@ -245,7 +284,7 @@ void doVoice(int voiceID, int action, float thevalue) {
   if (action==2) {
     for(int i=startosc;i<startosc+4;i++) {
       float newfreq = (13.75 * (pow(2,(mididata[1]-9.0-(7*(i-startosc)))/12.0)));
-      osc[i]->freq = newfreq;
+      osc[i]->freq = newfreq + (10*i);
     }
   }
 }
@@ -268,15 +307,15 @@ void computeAudio() {
       // calculate voice ADSR
       sp_tadsr_compute(sp, tadsr[i], &adsr_trig[i], &tadsr_out[i]);
       // set voice amp value
-      doVoice(i,1,(tadsr_out[i] / 24));
+      doVoice(i,1,(tadsr_out[i] / 12));
     }
     
     // calculate 1 monosample for each oscillator for all voices, 6 voices * 4 osc = 24 
-    for(int oscit=0; oscit<2; oscit++) {
+    for(int oscit=0; oscit<3; oscit++) {
       sp_osc_compute(sp, osc[oscit], NULL, &oscbuf[oscit][sampleit]);
       
       // apply filter settings
-      //sp_filts_compute(sp, filts, &oscbuf[oscit][sampleit], &filtout);
+      sp_filts_compute(sp, filts, &oscbuf[oscit][sampleit], &oscbuf[oscit][sampleit]);
       
       // double the sample to generate "stereo"
       //oscbuf[oscit][sampleit+1] = oscbuf[oscit][sampleit];
@@ -299,15 +338,19 @@ void computeAudio() {
   //arm_mult_f32(oscbuf[0], oscbuf[2], oscbuf[0], 1024);
   
   //add all buffers together
-  for(int oscit=1; oscit<2; oscit++) {
+  for(int oscit=1; oscit<8; oscit++) {
     arm_add_f32(oscbuf[0],oscbuf[oscit],oscbuf[0],512);
   }
   
   // filter resulting buffer oscbuf[0]
   
   // calculate filter 
-  arm_biquad_cascade_df2T_f32(&S, oscbuf[0], oscbuf[0], 512);
-//
+  
+  // init filter
+  //calcCoeffs();
+
+  //arm_biquad_cascade_df2T_f32(&S, oscbuf[0], oscbuf[0], 512);
+
   // calculate filter
 
   // double array mono -> stereo
@@ -400,8 +443,7 @@ void computeAudio() {
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
-  
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"le midi", CENTER_MODE);
+  //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"le midi", CENTER_MODE);
   // check for status (>127) or data
   // does not handle aftertouch yet!
   // e.g. an message with just 1 data byte
@@ -530,17 +572,18 @@ void handle_midi() {
  //   //midiNoteOn = 1;
  //   //adsr_timer = 0;
  //   //voice_frequency[0] = req_freq;
- //  }
+ }
  //
- //   if(mididata[0] == 176) {
- //     if(mididata[1]==71) {
- //       f_ssample_outChannel_Volume[0] = mididata[2]/127.0;
- //       drawVolumeIndicators();
- //     }
- //     if(mididata[1]==72) {
- //       f_ssample_outChannel_Volume[1] = mididata[2]/127.0;
- //       drawVolumeIndicators();
- //     }
+ if(mididata[0] == 176) {
+   if(mididata[1]==71) {
+    //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"le midi", CENTER_MODE);
+     filterfreq = mididata[2] * 10;
+     filts->freq = mididata[2] * 10;
+     if(filterfreq<20) filterfreq=20;
+   }
+     if(mididata[1]==72) {
+       filterq = (mididata[2]);
+     }
  //     if(mididata[1]==73) {
  //       f_ssample_outChannel_Volume[2] = mididata[2]/127.0;
  //       drawVolumeIndicators();
@@ -548,7 +591,45 @@ void handle_midi() {
  //     if(mididata[1]==74) {
  //       adsr[0] = mididata[2];
  //     }
-    }
+ }
+}
+
+void calcCoeffs() {
+  
+  float freq = filterfreq;
+  float Q = filterq;
+  //float freq = 1000.0f;
+  //float Q = 5.6f;
+  float samplerate = 24000.0f;
+  // float Kvalue = 3.1415926535897932f * freq / samplerate;
+  // //float K = tan(3.1415926535897932f * freq / samplerate);
+  // float K = arm_sin_f32(Kvalue) / arm_cos_f32(Kvalue);
+  // float norm = 1.0f / (1.0f + K / Q + K * K);
+  // //float
+  // //float myFloat = 0.1;
+  //
+  // pCoeffs[0] = K * K * norm;                  //a0
+  // pCoeffs[1]= 2 * pCoeffs[0];                 //a1
+  // pCoeffs[2] = pCoeffs[0];                    //a2
+  // pCoeffs[3] = 2 * (K * K - 1) * -norm;        //b1 (negated)
+  // pCoeffs[4] = (1 - K / Q + K * K) * -norm;    //b2 (negated)
+
+  // pCoeffs[5] = pCoeffs[0];
+  // pCoeffs[6] = pCoeffs[1];
+  // pCoeffs[7] = pCoeffs[2];
+  // pCoeffs[8] = pCoeffs[3];
+  // pCoeffs[9] = pCoeffs[4];
+  
+  
+  float c = 1.0f / (tanf(3.1415926535897932f  * (freq / samplerate)));
+  float csq = c * c;
+  float resonance = powf(10.0f, -(Q * 0.1f));
+  float q = sqrt(2.0f) * resonance;
+  pCoeffs[0] = 1.0f / (1.0f + (q * c) + (csq));
+  pCoeffs[1] = 2.0f * pCoeffs[0];
+  pCoeffs[2] = pCoeffs[0];
+  pCoeffs[3] = -1 * (2.0f * pCoeffs[0]) * (1.0f - csq);
+  pCoeffs[4] = -1 * pCoeffs[0] * (1.0f - (q * c) + csq);
 }
 
 void UART6_Config() {
