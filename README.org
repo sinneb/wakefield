@@ -1,7 +1,11 @@
-* xakefield
+* wakefield
+
+An STM32f7 discovery board synthesizer capable of running and controlling compiled puredata patches.
+
 
 based on the ARM / STM32F7 DIY synth workshop by thi-ng (https://github.com/thi-ng/ws-ldn-12)
-based on the soundpipe lightweight music DSP library by PaulBatchelor (https://github.com/PaulBatchelor/Soundpipe)
+
+uses enzienaudio's (https://enzienaudio.com) online puredata patch compiler
 
 ** Features
 

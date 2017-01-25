@@ -1,6 +1,6 @@
 /*
 
-faustreceiver
+Wakefield STM32f7 Synthesizer
 
 */
 
@@ -25,8 +25,8 @@ faustreceiver
 // defines
 #define VOLUME 50
 #define SAMPLE_RATE 44100
-#define AUDIO_DMA_BUFFER_SIZE 1024  // divided by 4 (C array item length) reserves a stereo audio buffer of 1024 bytes
-                                    // translating to 2x512 bytes mono
+#define AUDIO_DMA_BUFFER_SIZE 1024  // divided by 4 (C array item length) reserves a stereo audio buffer of 256 bytes
+                                    
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
 
 // audio buffers
@@ -44,45 +44,14 @@ uint8_t rx_byte[1];
 uint8_t runOnce;
 static TS_StateTypeDef rawTouchState;
 
-
-// typedef struct {
-//
-//   int fSamplingFreq;
-//   int iVec0[2];
-//   float fRec0[2];
-//   float fRec3[2];
-//   float fRec1[2];
-//   float fRec2[2];
-//   FAUSTFLOAT fHslider0;
-//   float fConst0;
-//   float fConst1;
-//   FAUSTFLOAT fHslider1;
-//   float fConst2;
-//   FAUSTFLOAT fHslider2;
-//
-// } mydsp;
-//
-// // mydsp* newmydsp() {
-// //   mydsp* dsp = (mydsp*)malloc(sizeof(mydsp));
-// //   return dsp;
-// // }
-//
-// mydsp* dsp;
-// float* outputs[512];
-
-
 double sampleRate = 44100;
-HeavyContextInterface *context;//= hv_letest_new(sampleRate);
-// *context;// = hv//_letest_new(sampleRate);
+HeavyContextInterface *context;
 
 // header
 void initAudio();
 void computeAudio();
 void UART6_Config();
 void handle_midi();
-// void calcCoeffs();
-// void computemydsp(mydsp* dsp, int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs);
-// void initmydsp(mydsp* dsp, int samplingFreq);
 
 void printHook(HeavyContextInterface *thecontext, const char *printLabel, const char *msgString, const HvMessage *themsg) {
   BSP_LCD_DisplayStringAt(150, 150, (uint8_t *)msgString, LEFT_MODE);
@@ -110,22 +79,15 @@ int main() {
   
   BSP_LCD_Clear(LCD_COLOR_BLACK);
   BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"faustreceiver", CENTER_MODE);
 
   // start audio system
   initAudio();
-  
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"faustreceiver", CENTER_MODE);
-  
-  //newmydsp();
-  //dsp->fHslider0 = 2.0f;
-  //initmydsp(dsp, 48000);
   context = hv_wakefield_new(sampleRate);
-  
   hv_setPrintHook(context, &printHook);
-  
-  int blah = 0;
-  
+
   // main loop
+  int blah = 0;
   while (1) {
 
     // do nothing
@@ -292,7 +254,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			uint16_t touchx = rawTouchState.touchX[0];
       uint16_t touchy = rawTouchState.touchY[0];
       
-      BSP_LCD_DisplayStringAt(200, 200, (uint8_t *)"sakfo", LEFT_MODE);
+      BSP_LCD_DisplayStringAt(200, 200, (uint8_t *)"touchevent", LEFT_MODE);
       
 		}
 	// read state and continue with while

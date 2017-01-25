@@ -1,21 +1,3 @@
 /bin
 /build
 
-libpd/libpd/
-
-/src/4spoor
-/src/ex01
-/src/ex02
-/src/ex03
-/src/ex04
-/src/ex05
-/src/ex06
-/src/ex07
-/src/ex08
-/src/faustreceiver
-/src/max
-/src/octapal
-/src/soundpipe_stm32f7
-/src/wakefield
-/src/xakefield
-
