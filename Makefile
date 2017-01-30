@@ -76,9 +76,9 @@ endif
 SYS_INCLUDES = $(CMSIS_INCLUDES) $(HAL_INCLUDES) $(BSP_INCLUDES) $(USBH_INCLUDES) $(FATFS_INCLUDES)
 SYS_SRC = $(CMSIS_SRC) $(HAL_SRC) $(BSP_SRC) $(LL_SRC) $(USBH_SRC) $(FATFS_SRC)
 
-USER_INCLUDES += -I$(USER_SRC_DIR) -Iext -I$(GEN_DSP_DIR)
-USER_SRC += $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c) $(wildcard $(GEN_DSP_DIR)/*.c)
-USER_CPP_SRC += $(wildcard $(USER_SRC_DIR)/common/*.cpp) $(wildcard $(USER_SRC_DIR)/$(module)/*.cpp) $(wildcard $(GEN_DSP_DIR)/*.cpp)
+USER_INCLUDES += -I$(USER_SRC_DIR) -Iext -I$(GEN_DSP_DIR) -I$(USER_SRC_DIR)/heavystatic -I$(USER_SRC_DIR)/heavydynamic
+USER_SRC += $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/heavystatic/*.c) $(wildcard $(USER_SRC_DIR)/heavydynamic/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c) $(wildcard $(GEN_DSP_DIR)/*.c)
+USER_CPP_SRC += $(wildcard $(USER_SRC_DIR)/common/*.cpp) $(wildcard $(USER_SRC_DIR)/heavystatic/*.cpp) $(wildcard $(USER_SRC_DIR)/heavydynamic/*.cpp) $(wildcard $(USER_SRC_DIR)/$(module)/*.cpp) $(wildcard $(GEN_DSP_DIR)/*.cpp)
 
 ALL_INCLUDES = $(USER_INCLUDES) $(SYS_INCLUDES)
 ALL_SRC = $(SYS_SRC) $(USER_SRC)
