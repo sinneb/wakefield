@@ -24,7 +24,7 @@ Wakefield STM32f7 Synthesizer
 
 // defines
 #define VOLUME 50
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 48000
 #define AUDIO_DMA_BUFFER_SIZE 1024  // divided by 4 (C array item length) reserves a stereo audio buffer of 256 bytes
                                     
 #define AUDIO_DMA_BUFFER_SIZE2 (AUDIO_DMA_BUFFER_SIZE >> 1)
@@ -44,17 +44,31 @@ uint8_t rx_byte[1];
 uint8_t runOnce;
 static TS_StateTypeDef rawTouchState;
 
-double sampleRate = 44100;
+// heavy
+double sampleRate = 48000;
 HeavyContextInterface *context;
+
+// adc
+uint32_t g_ADCValue;
+int g_MeasurementNumber;
+ADC_HandleTypeDef g_AdcHandle;
+DMA_HandleTypeDef  g_DmaHandle;
+enum{ ADC_BUFFER_LENGTH = 8192 };
+uint32_t g_ADCBuffer[ADC_BUFFER_LENGTH];
+uint16_t ADCchannelValues[4];
 
 // header
 void initAudio();
 void computeAudio();
 void UART6_Config();
 void handle_midi();
+void drawGui();
+void printFloat(float lefloat, int x, int y);
+void ConfigureADC();
+void ConfigureDMA();
 
 void printHook(HeavyContextInterface *thecontext, const char *printLabel, const char *msgString, const HvMessage *themsg) {
-  BSP_LCD_DisplayStringAt(150, 150, (uint8_t *)msgString, LEFT_MODE);
+  //BSP_LCD_DisplayStringAt(150, 150, (uint8_t *)msgString, LEFT_MODE);
 }
 
 int main() {
@@ -77,17 +91,21 @@ int main() {
 	  BSP_TS_ITConfig();
   }  
   
-  BSP_LCD_Clear(LCD_COLOR_BLACK);
-  BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"faustreceiver", CENTER_MODE);
+  // GUI init
+  drawGui();
 
   // start audio system
   initAudio();
   context = hv_wakefield_new(sampleRate);
   hv_setPrintHook(context, &printHook);
 
+  // init ADC and DMA
+  ConfigureADC();
+  ConfigureDMA();
+  HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
+
   // main loop
-  int blah = 0;
+  //int blah = 0;
   while (1) {
 
     // do nothing
@@ -96,17 +114,40 @@ int main() {
     // //sprintf(a, "%d", (int)filterfreq);
     sprintf(a, "%d", (int)HAL_GetTick());
     // //sprintf(a, "%d", (int)result*1000);
-    BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
+    BSP_LCD_DisplayStringAt(10, 10, (uint8_t *)a, LEFT_MODE);
+    //
+    // if(HAL_GetTick()>8000 && blah ==0) {
+    //   BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"go", CENTER_MODE);
+    //   hv_sendBangToReceiver(context, hv_stringToHash("thebang"));
+    //   hv_sendFloatToReceiver(context, hv_stringToHash("thefloat"), 2);
+    //   blah = 1;
+    // }
     
-    if(HAL_GetTick()>3000 && blah ==0) {
-      BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"go", CENTER_MODE);
-      hv_sendBangToReceiver(context, hv_stringToHash("thebang"));
-      blah = 1;
-    }
+    //char a[] = "";
+    uint32_t digu = (uint32_t)(ADCchannelValues[0]);
+   //uint16_t newval = g_ADCValue - (uint16_t)*blsaw->freq;
+    sprintf(a, "%ld", digu);
+    BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
 
   }
 
   return 0;
+}
+
+void printFloat(float lefloat, int x, int y) {
+  char a[] = "";
+  char *tmpSign = (lefloat < 0) ? "-" : "";
+  float tmpVal = (lefloat < 0) ? -lefloat : lefloat;
+
+  int tmpInt1 = tmpVal;                  // Get the integer (678).
+  float tmpFrac = tmpVal - tmpInt1;      // Get fraction (0.0123).
+  int tmpInt2 = trunc(tmpFrac * 10000);  // Turn into integer (123).
+
+  // Print as parts, note that you need 0-padding for fractional bit.
+
+  sprintf (a, "%s%d.%03d", tmpSign, tmpInt1, tmpInt2);
+  //sprintf(a, "%f", testfloat);
+  BSP_LCD_DisplayStringAt(x, y, (uint8_t *)a, LEFT_MODE);
 }
 
 void initAudio() {
@@ -140,7 +181,7 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 
 void computeAudio() {
 
-  float audioproc[512];
+  //float audioproc[512];
   float32_t mixdown[1024];
 
   // calculate 512 monosamples
@@ -223,7 +264,61 @@ void handle_midi() {
  }
 }
 
+// x1,y1,x2,y2
+// 1 = button
+// 2 = toggle
+// 3 = slider
+// min
+// max
+// current
+// 
+// slider -> width 200 (still hardcoded)
+// slider -> heigth 20 (hardcoded)
+float gui_elements[3][8] = {
+// x1  y1  x2  y2  type min max value
+  {100,100,300,120,3,  0, 100, 10},
+  {200,200,400,220,3,  0, 100, 50},
+  { 50, 50,  0,  0,1,  0,   1,  0}
+};
 
+// gui name and controller PD element
+char *gui_elements_name[2][2] = {
+  {"ele1","thefloat"},
+  {"ele2","thefloat"}
+};
+
+uint8_t nbr_elements = 3;
+
+void drawGui() {
+  BSP_LCD_Clear(LCD_COLOR_BLACK);
+  BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+  BSP_LCD_SetFont(&Font12);
+  //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"faustreceiver", CENTER_MODE);
+  
+  // iterate through elements and draw
+  for (uint8_t i = 0; i < nbr_elements; i++) {
+    // slider
+    if(gui_elements[i][4]==3) {
+      BSP_LCD_DrawRect(gui_elements[i][0], gui_elements[i][1],200,20);
+      BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2, gui_elements[i][7] * (200.0f / gui_elements[i][6]),17);
+      BSP_LCD_DisplayStringAt(gui_elements[i][0]-50, gui_elements[i][1]+5, (uint8_t *)gui_elements_name[i][0], LEFT_MODE);
+      printFloat(gui_elements[i][7], gui_elements[i][0]+50, gui_elements[i][1]+5);
+    }
+    // button
+    if(gui_elements[i][4]==1) {
+      //BSP_LCD_DisplayStringAt(, (uint8_t *)"slider", LEFT_MODE);
+      BSP_LCD_DrawRect(gui_elements[i][0], gui_elements[i][1],20,20);
+      // button pressed down
+      if(gui_elements[i][7]==1) {
+          BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2,17,17);
+      }
+      //BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2, gui_elements[i][7] * (200.0f / gui_elements[i][6]),17);
+      //BSP_LCD_DisplayStringAt(gui_elements[i][0]-50, gui_elements[i][1]+5, (uint8_t *)gui_elements_name[i][0], LEFT_MODE);
+      //printFloat(gui_elements[i][7], gui_elements[i][0]+50, gui_elements[i][1]+5);
+    }
+  }
+}
 
 // Interrupt handler shared between:
 // SD_DETECT pin, USER_KEY button and touch screen interrupt
@@ -240,7 +335,10 @@ void EXTI15_10_IRQHandler(void) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	// runonce to run this function only once when IRQ fires (fires continuesly)
+  // getsecondtouch
+  // reset flags
 	runOnce = 0;
+  //int getSecondTouch = 0;
   
   //drawInterface();
 		
@@ -254,9 +352,58 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			uint16_t touchx = rawTouchState.touchX[0];
       uint16_t touchy = rawTouchState.touchY[0];
       
-      BSP_LCD_DisplayStringAt(200, 200, (uint8_t *)"touchevent", LEFT_MODE);
+      // check is element is hit
+      for (uint8_t i = 0; i < nbr_elements; i++) {
+        // touch on a GUI element?
+        if(touchx > gui_elements[i][0] && touchx < gui_elements[i][2] && touchy > gui_elements[i][1] && touchy < gui_elements[i][3]) {
+          // check GUI element type
+          // button
+          if(gui_elements[i][4]==1) {
+            // lock the touchevent until finished
+            while(rawTouchState.touchDetected == 1) {
+              gui_elements[i][7]= 1;
+              drawGui();
+            }
+            // reset button
+            gui_elements[i][7]= 0;
+          }
+          // slider
+          if(gui_elements[i][4]==3) {
+            // lock the touchevent until finished
+            while(rawTouchState.touchDetected == 1) {
+        			touchx = rawTouchState.touchX[0];
+              touchy = rawTouchState.touchY[0];
+              
+              //BSP_LCD_FillCircle(touchx,touchy,10);
+              // new value = touchx - guielement x
+              int newvalue = rawTouchState.touchX[0]-gui_elements[i][0];
+              float newscaledvalue = newvalue / (200.0f / gui_elements[i][6]);
+              if(newvalue >= gui_elements[i][5] && newscaledvalue <= gui_elements[i][6]) {
+                gui_elements[i][7]= newscaledvalue;
+                // set linked PD patch value
+                hv_sendFloatToReceiver(context, hv_stringToHash(gui_elements_name[i][1]), newscaledvalue);
+              }
+              drawGui();
+              
+              BSP_TS_GetState(&rawTouchState);
+            } // end touchlock
+          } // end slider GUI element 
+        } // end touch on GUI event
+      }
       
+      // //BSP_LCD_DisplayStringAt(200, 200, (uint8_t *)"touchevent", LEFT_MODE);
+      // if(touchx < 150 && touchx > 100 && touchy > 100 && touchy < 150) {
+      //
+      //   // get second touch event
+      //   getSecondTouch = 1;
+      // }
 		}
+    
+      //     if (getSecondTouch == 1 && rawTouchState.touchDetected == 2) {
+      // uint16_t touchx = rawTouchState.touchX[1];
+      //       uint16_t touchy = rawTouchState.touchY[1];
+      //       BSP_LCD_FillCircle(touchx,touchy,50);
+      //     }
 	// read state and continue with while
 	BSP_TS_GetState(&rawTouchState);
 	} // end while
@@ -313,3 +460,165 @@ void USART6_IRQHandler(void)
   HAL_UART_IRQHandler(&uart_config);
 }
 
+
+
+
+
+// ADC and DMA routines
+
+void ConfigureADC()
+{
+    GPIO_InitTypeDef gpioInit;
+ 
+    // MCU pin for A1 = PF10
+    // Function for PF10 = ADC3_IN8
+    // 5v compatible port
+    __GPIOF_CLK_ENABLE();
+    __GPIOA_CLK_ENABLE();
+    __ADC3_CLK_ENABLE();
+ 
+    gpioInit.Pin = GPIO_PIN_10|GPIO_PIN_9|GPIO_PIN_8;
+    gpioInit.Mode = GPIO_MODE_ANALOG;
+    gpioInit.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOF, &gpioInit);
+
+    gpioInit.Pin = GPIO_PIN_0;
+    gpioInit.Mode = GPIO_MODE_ANALOG;
+    gpioInit.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &gpioInit);
+ 
+    HAL_NVIC_SetPriority(ADC_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(ADC_IRQn);
+ 
+    ADC_ChannelConfTypeDef adcChannel;
+ 
+    g_AdcHandle.Instance = ADC3;
+ 
+    g_AdcHandle.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV2;
+    g_AdcHandle.Init.Resolution = ADC_RESOLUTION_12B;
+    g_AdcHandle.Init.ScanConvMode = ENABLE;
+    g_AdcHandle.Init.ContinuousConvMode = ENABLE;
+    g_AdcHandle.Init.DiscontinuousConvMode = DISABLE;
+    g_AdcHandle.Init.NbrOfDiscConversion = 0;
+    g_AdcHandle.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+    g_AdcHandle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T1_CC1;
+    g_AdcHandle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    g_AdcHandle.Init.NbrOfConversion = 4;
+    g_AdcHandle.Init.DMAContinuousRequests = ENABLE;
+    g_AdcHandle.Init.EOCSelection = DISABLE;
+ 
+    HAL_ADC_Init(&g_AdcHandle);
+    
+    adcChannel.Channel = ADC_CHANNEL_0;
+    adcChannel.Rank = 1;
+    adcChannel.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+    if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+      /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+      */
+    adcChannel.Channel = ADC_CHANNEL_8;
+    adcChannel.Rank = 2;
+    if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+      /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+      */
+    adcChannel.Channel = ADC_CHANNEL_7;
+    adcChannel.Rank = 3;
+    if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+      /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+      */
+    adcChannel.Channel = ADC_CHANNEL_6;
+    adcChannel.Rank = 4;
+    if (HAL_ADC_ConfigChannel(&g_AdcHandle, &adcChannel) != HAL_OK)
+    {
+      Error_Handler();
+    }
+    
+}
+
+void ConfigureDMA()
+{
+    __DMA2_CLK_ENABLE(); 
+    g_DmaHandle.Instance = DMA2_Stream1;
+  
+    g_DmaHandle.Init.Channel  = DMA_CHANNEL_2;
+    g_DmaHandle.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    g_DmaHandle.Init.PeriphInc = DMA_PINC_DISABLE;
+    g_DmaHandle.Init.MemInc = DMA_MINC_ENABLE;
+    g_DmaHandle.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    g_DmaHandle.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    g_DmaHandle.Init.Mode = DMA_CIRCULAR;
+    g_DmaHandle.Init.Priority = DMA_PRIORITY_HIGH;
+    g_DmaHandle.Init.FIFOMode = DMA_FIFOMODE_DISABLE;         
+    g_DmaHandle.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_HALFFULL;
+    g_DmaHandle.Init.MemBurst = DMA_MBURST_SINGLE;
+    g_DmaHandle.Init.PeriphBurst = DMA_PBURST_SINGLE; 
+    
+    HAL_DMA_Init(&g_DmaHandle);
+    
+    __HAL_LINKDMA(&g_AdcHandle, DMA_Handle, g_DmaHandle);
+
+    HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);   
+    HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
+    {
+      // uint32_t a2 = 0;
+      // for(int i=1000;i<1400;i=i+4) {
+      //   a2 = a2 + g_ADCBuffer[i+2];
+      // }
+      // a2 = a2 / 100;
+      
+//      if(abs(g_ADCValue-a2)>2) {g_ADCValue = a2;}
+      
+//      {
+        uint32_t channels[4] = {0,0,0,0};
+        for(int i=1000;i<1800;i=i+4) {
+          channels[0] = channels[0] + g_ADCBuffer[i+0];
+          channels[1] = channels[1] + g_ADCBuffer[i+1];
+          channels[2] = channels[2] + g_ADCBuffer[i+2];
+          channels[3] = channels[3] + g_ADCBuffer[i+3];
+        }
+      
+        channels[0] = channels[0] / 200;
+        channels[1] = channels[1] / 200;
+        channels[2] = channels[2] / 200;
+        channels[3] = channels[3] / 200;
+
+        if(abs(ADCchannelValues[0]-channels[0])>1) {ADCchannelValues[0] = channels[0];}
+        if(abs(ADCchannelValues[1]-channels[1])>1) {ADCchannelValues[1] = channels[1];}
+        if(abs(ADCchannelValues[2]-channels[2])>1) {ADCchannelValues[2] = channels[2];}
+        if(abs(ADCchannelValues[3]-channels[3])>1) {ADCchannelValues[3] = channels[3];}
+      
+      
+      BSP_LED_Toggle(LED_GREEN);
+        //g_ADCValue = ADCchannelValues[2];
+      
+      //g_ADCValue = g_ADCBuffer[2];//std::accumulate(g_ADCBuffer, g_ADCBuffer + ADC_BUFFER_LENGTH, 0) / ADC_BUFFER_LENGTH;
+        //g_MeasurementNumber += ADC_BUFFER_LENGTH;
+        //if(abs(g_ADCValue - (uint16_t)*blsaw->freq)>5) {
+        //  *blsaw->freq = g_ADCValue;
+        //}
+       // 
+    }
+ 
+void DMA2_Stream1_IRQHandler()
+{
+    HAL_DMA_IRQHandler(&g_DmaHandle);
+}
+
+void ADC_IRQHandler()
+{
+    HAL_ADC_IRQHandler(&g_AdcHandle);
+}
