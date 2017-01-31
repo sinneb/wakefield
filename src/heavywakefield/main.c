@@ -596,7 +596,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
         channels[2] = channels[2] / 200;
         channels[3] = channels[3] / 200;
 
-        if(abs(ADCchannelValues[0]-channels[0])>1) {ADCchannelValues[0] = channels[0];}
+        if(abs(ADCchannelValues[0]-channels[0])>1) {
+          ADCchannelValues[0] = channels[0];
+          hv_sendFloatToReceiver(context, hv_stringToHash("thefloat"), ADCchannelValues[0] / 400);
+        }
         if(abs(ADCchannelValues[1]-channels[1])>1) {ADCchannelValues[1] = channels[1];}
         if(abs(ADCchannelValues[2]-channels[2])>1) {ADCchannelValues[2] = channels[2];}
         if(abs(ADCchannelValues[3]-channels[3])>1) {ADCchannelValues[3] = channels[3];}
