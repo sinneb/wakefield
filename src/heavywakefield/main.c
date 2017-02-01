@@ -21,6 +21,9 @@ Wakefield STM32f7 Synthesizer
 #include "arm_math.h"
 
 #include "Heavy_wakefield.h"
+#include "Heavy_patch2.h"
+#include "Heavy_patch3.h"
+#include "Heavy_patch4.h"
 
 // defines
 #define VOLUME 50
@@ -42,11 +45,16 @@ uint8_t rx_byte[1];
 
 // touch
 uint8_t runOnce;
+uint8_t clearGUI = 1;
+uint8_t dirtyGUI = 1;
 static TS_StateTypeDef rawTouchState;
 
 // heavy
 double sampleRate = 48000;
-HeavyContextInterface *context;
+HeavyContextInterface *context1;
+HeavyContextInterface *context2;
+HeavyContextInterface *context3;
+HeavyContextInterface *context4;
 
 // adc
 uint32_t g_ADCValue;
@@ -96,8 +104,12 @@ int main() {
 
   // start audio system
   initAudio();
-  context = hv_wakefield_new(sampleRate);
-  hv_setPrintHook(context, &printHook);
+  
+  context1 = hv_wakefield_new(sampleRate);
+  context2 = hv_patch2_new(sampleRate);
+  context3 = hv_patch3_new(sampleRate);
+  context4 = hv_patch4_new(sampleRate);
+  hv_setPrintHook(context1, &printHook);
 
   // init ADC and DMA
   ConfigureADC();
@@ -108,13 +120,11 @@ int main() {
   //int blah = 0;
   while (1) {
 
-    // do nothing
-    //BSP_LED_Toggle(LED_GREEN);
+    // print HALtick
     char a[] = "";
-    // //sprintf(a, "%d", (int)filterfreq);
     sprintf(a, "%d", (int)HAL_GetTick());
-    // //sprintf(a, "%d", (int)result*1000);
     BSP_LCD_DisplayStringAt(10, 10, (uint8_t *)a, LEFT_MODE);
+    
     //
     // if(HAL_GetTick()>8000 && blah ==0) {
     //   BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"go", CENTER_MODE);
@@ -123,12 +133,16 @@ int main() {
     //   blah = 1;
     // }
     
-    //char a[] = "";
     uint32_t digu = (uint32_t)(ADCchannelValues[0]);
-   //uint16_t newval = g_ADCValue - (uint16_t)*blsaw->freq;
     sprintf(a, "%ld", digu);
-    BSP_LCD_DisplayStringAt(50, 50, (uint8_t *)a, LEFT_MODE);
-
+    BSP_LCD_DisplayStringAt(10, 25, (uint8_t *)a, LEFT_MODE);
+    
+    // draw GUI if dirty
+    // in mainloop not to interfere
+    if(dirtyGUI == 1) {
+      drawGui();
+      dirtyGUI = 0;
+    }
   }
 
   return 0;
@@ -181,63 +195,36 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 
 void computeAudio() {
 
-  //float audioproc[512];
-  float32_t mixdown[1024];
+  float32_t hv_context1[512];
+  // float32_t hv_context2[512];
+  // float32_t hv_context3[512];
+  // float32_t hv_context4[512];
+  float32_t mixdown[512];
+  memset(mixdown, 0, sizeof mixdown);
 
-  // calculate 512 monosamples
-  // for(int sampleit=0;sampleit<512;sampleit++) {
-//
-//     audioproc[sampleit] = 0;
-//
-//   }
+  hv_processInlineInterleaved(context1, NULL, hv_context1, 128);
+  // hv_processInlineInterleaved(context2, NULL, hv_context2, 128);
+  // hv_processInlineInterleaved(context3, NULL, hv_context3, 128);
+  //hv_processInlineInterleaved(context4, NULL, hv_context4, 128);
+  //hv_processInlineInterleaved(context2, NULL, mixdown, 128);
   
-  //computemydsp(dsp, 512, 0, outputs);
+  // volume
+  arm_scale_f32(hv_context1, 0.5, hv_context1, 512);
+  // arm_scale_f32(hv_context2, 0.1, hv_context2, 512);
+  // arm_scale_f32(hv_context3, 0.1, hv_context3, 512);
+  // arm_scale_f32(hv_context4, 0.1, hv_context4, 512);
   
-  hv_processInlineInterleaved(context, NULL, mixdown, 128);
+  // mixdown
+  arm_add_f32(mixdown,hv_context1,mixdown,512);
+  // arm_add_f32(mixdown,hv_context2,mixdown,512);
+  // arm_add_f32(mixdown,hv_context3,mixdown,512);
+  // arm_add_f32(mixdown,hv_context4,mixdown,512);
   
-  // //double array mono -> stereo
-  // int counter = 0;
-  // for(int sampleit=0;sampleit<1024;sampleit+=2) {
-  //   mixdown[sampleit] = audioproc[counter];
-  //   mixdown[sampleit+1] = audioproc[counter];
-  //   counter++;
-  // }
-
   // convert float to q15 / int16
   // send to transferbuffer
   arm_float_to_q15(mixdown, int_bufProcessedOut, 512);
 }
 
-// UART (MIDI) HANDLING --------------------------------------------
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
-{
-  //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"le midi", CENTER_MODE);
-  // check for status (>127) or data
-  // does not handle aftertouch yet!
-  // e.g. an message with just 1 data byte
-  if(rx_byte[0]>127) {
-    mididata[0]=rx_byte[0];
-  } 
-  else
-    // data coming in, in two bytes
-  {
-    if(mididata[1]==-1) {
-      mididata[1] = rx_byte[0];
-    } else {
-      mididata[2] = rx_byte[0];
-      handle_midi();
-      // float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
-//       osc->freq = req_freq;
-//       osc2->freq = (13.75 * (pow(2,(mididata[1]-12.0-9.0)/12.0)));
-//       adsr_trig = 1;
-      
-      mididata[1] = -1;
-    }
-  }
-  // reset interrupt
-  HAL_UART_Receive_IT(&uart_config, rx_byte, 1);
-}  
   
 void handle_midi() {
 
@@ -274,26 +261,36 @@ void handle_midi() {
 // 
 // slider -> width 200 (still hardcoded)
 // slider -> heigth 20 (hardcoded)
-float gui_elements[3][8] = {
+float gui_elements[5][8] = {
 // x1  y1  x2  y2  type min max value
-  {100,100,300,120,3,  0, 100, 10},
-  {200,200,400,220,3,  0, 100, 50},
-  { 50, 50,  0,  0,1,  0,   1,  0}
+  {250, 30,450, 50,3,  0, 100, 10},
+  {250,100,450,120,3,  0, 100, 50},
+  {250,170,450,190,3,  0, 100, 10},
+  {250,240,450,260,3,  0, 100, 50},
+  { 50, 50, 80, 80,1,  0,   1,  0}
 };
 
 // gui name and controller PD element
-char *gui_elements_name[2][2] = {
-  {"ele1","thefloat"},
-  {"ele2","thefloat"}
+char *gui_elements_name[5][2] = {
+  {"s1","slider1"},
+  {"s2","slider2"},
+  {"s3","slider3"},
+  {"s4","slider4"},
+  {"b1","button1"}
 };
 
-uint8_t nbr_elements = 3;
+uint8_t nbr_elements = 5;
 
 void drawGui() {
-  BSP_LCD_Clear(LCD_COLOR_BLACK);
-  BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
-  BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
-  BSP_LCD_SetFont(&Font12);
+  // clear screen only once
+  if(clearGUI==1) {
+    BSP_LCD_Clear(LCD_COLOR_BLACK);
+    BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+    BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+    BSP_LCD_SetFont(&Font12);    
+    clearGUI = 0; 
+  }
+
   //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"faustreceiver", CENTER_MODE);
   
   // iterate through elements and draw
@@ -301,6 +298,9 @@ void drawGui() {
     // slider
     if(gui_elements[i][4]==3) {
       BSP_LCD_DrawRect(gui_elements[i][0], gui_elements[i][1],200,20);
+      BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+      BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2, 196,17);
+      BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
       BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2, gui_elements[i][7] * (200.0f / gui_elements[i][6]),17);
       BSP_LCD_DisplayStringAt(gui_elements[i][0]-50, gui_elements[i][1]+5, (uint8_t *)gui_elements_name[i][0], LEFT_MODE);
       printFloat(gui_elements[i][7], gui_elements[i][0]+50, gui_elements[i][1]+5);
@@ -308,10 +308,10 @@ void drawGui() {
     // button
     if(gui_elements[i][4]==1) {
       //BSP_LCD_DisplayStringAt(, (uint8_t *)"slider", LEFT_MODE);
-      BSP_LCD_DrawRect(gui_elements[i][0], gui_elements[i][1],20,20);
+      BSP_LCD_DrawRect(gui_elements[i][0], gui_elements[i][1],30,30);
       // button pressed down
       if(gui_elements[i][7]==1) {
-          BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2,17,17);
+          BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2,27,27);
       }
       //BSP_LCD_FillRect(gui_elements[i][0]+2, gui_elements[i][1]+2, gui_elements[i][7] * (200.0f / gui_elements[i][6]),17);
       //BSP_LCD_DisplayStringAt(gui_elements[i][0]-50, gui_elements[i][1]+5, (uint8_t *)gui_elements_name[i][0], LEFT_MODE);
@@ -359,13 +359,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           // check GUI element type
           // button
           if(gui_elements[i][4]==1) {
+            // do buttonevent
+            //gui_elements[0][7]= 75;
+            //context1 = hv_patch2_new(sampleRate);
+            //BSP_LCD_DisplayStringAt(50, 250, (uint8_t *)"initAudio error", LEFT_MODE);
             // lock the touchevent until finished
             while(rawTouchState.touchDetected == 1) {
               gui_elements[i][7]= 1;
+              
               drawGui();
+              BSP_TS_GetState(&rawTouchState);
             }
             // reset button
             gui_elements[i][7]= 0;
+            drawGui();
           }
           // slider
           if(gui_elements[i][4]==3) {
@@ -381,7 +388,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
               if(newvalue >= gui_elements[i][5] && newscaledvalue <= gui_elements[i][6]) {
                 gui_elements[i][7]= newscaledvalue;
                 // set linked PD patch value
-                hv_sendFloatToReceiver(context, hv_stringToHash(gui_elements_name[i][1]), newscaledvalue);
+                hv_sendFloatToReceiver(context1, hv_stringToHash(gui_elements_name[i][1]), newscaledvalue);
               }
               drawGui();
               
@@ -460,7 +467,36 @@ void USART6_IRQHandler(void)
   HAL_UART_IRQHandler(&uart_config);
 }
 
+// UART (MIDI) HANDLING --------------------------------------------
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+  //BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize() / 2 - 8, (uint8_t *)"le midi", CENTER_MODE);
+  // check for status (>127) or data
+  // does not handle aftertouch yet!
+  // e.g. an message with just 1 data byte
+  if(rx_byte[0]>127) {
+    mididata[0]=rx_byte[0];
+  } 
+  else
+    // data coming in, in two bytes
+  {
+    if(mididata[1]==-1) {
+      mididata[1] = rx_byte[0];
+    } else {
+      mididata[2] = rx_byte[0];
+      handle_midi();
+      // float req_freq = (13.75 * (pow(2,(mididata[1]-9.0)/12.0)));
+//       osc->freq = req_freq;
+//       osc2->freq = (13.75 * (pow(2,(mididata[1]-12.0-9.0)/12.0)));
+//       adsr_trig = 1;
+      
+      mididata[1] = -1;
+    }
+  }
+  // reset interrupt
+  HAL_UART_Receive_IT(&uart_config, rx_byte, 1);
+}  
 
 
 
@@ -591,18 +627,35 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
           channels[3] = channels[3] + g_ADCBuffer[i+3];
         }
       
-        channels[0] = channels[0] / 200;
-        channels[1] = channels[1] / 200;
-        channels[2] = channels[2] / 200;
-        channels[3] = channels[3] / 200;
+        channels[0] = channels[0] / 8000;
+        channels[1] = channels[1] / 8000;
+        channels[2] = channels[2] / 8000;
+        channels[3] = channels[3] / 800;
 
-        if(abs(ADCchannelValues[0]-channels[0])>1) {
+        if(abs(ADCchannelValues[0]-channels[0])>0) {
           ADCchannelValues[0] = channels[0];
-          hv_sendFloatToReceiver(context, hv_stringToHash("thefloat"), ADCchannelValues[0] / 400);
+          hv_sendFloatToReceiver(context1, hv_stringToHash("slider1"), ADCchannelValues[0]);
+          gui_elements[0][7]= ADCchannelValues[0];
+          dirtyGUI = 1;
         }
-        if(abs(ADCchannelValues[1]-channels[1])>1) {ADCchannelValues[1] = channels[1];}
-        if(abs(ADCchannelValues[2]-channels[2])>1) {ADCchannelValues[2] = channels[2];}
-        if(abs(ADCchannelValues[3]-channels[3])>1) {ADCchannelValues[3] = channels[3];}
+        if(abs(ADCchannelValues[1]-channels[1])>0) {
+          ADCchannelValues[1] = channels[1];
+          hv_sendFloatToReceiver(context1, hv_stringToHash("slider2"), ADCchannelValues[1]);
+          gui_elements[1][7]= ADCchannelValues[1];
+          dirtyGUI = 1;
+        }
+        if(abs(ADCchannelValues[2]-channels[2])>0) {
+          ADCchannelValues[2] = channels[2];
+          hv_sendFloatToReceiver(context1, hv_stringToHash("slider3"), ADCchannelValues[2]);
+          gui_elements[2][7]= ADCchannelValues[2];
+          dirtyGUI = 1;
+        }
+        if(abs(ADCchannelValues[3]-channels[3])>0) {
+          ADCchannelValues[3] = channels[3];
+          hv_sendFloatToReceiver(context1, hv_stringToHash("slider4"), ADCchannelValues[3]);
+          gui_elements[3][7]= ADCchannelValues[3];
+          dirtyGUI = 1;
+        }
       
       
       BSP_LED_Toggle(LED_GREEN);

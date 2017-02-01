@@ -95,10 +95,10 @@ LIBS += -lm -lstdc++
 LIBS += -larm_cortexM7lfsp_math
 
 CFLAGS += -std=c11 -fsigned-char -ffunction-sections -fdata-sections -Wall
-CFLAGS += -DNO_LIBSNDFILE 
+CFLAGS += -DNO_LIBSNDFILE -D__unix
 
 CPPFLAGS += -std=c++11 -fsigned-char -ffunction-sections -fdata-sections -Wall
-CPPFLAGS += -DNO_LIBSNDFILE 
+CPPFLAGS += -DNO_LIBSNDFILE -D__unix
 
 LD_FLAGS += -Lmake/devices -L$(LIB_DIR) -L/Users/Arthur/arm/STM32Cube_FW_F7_V1.4.0/Drivers/CMSIS/Lib/GCC
 LD_FLAGS += -Xlinker --gc-sections -Wl,-Map,$(BIN_DIR)/$(TARGET_NAME).map
