@@ -6,6 +6,7 @@ STM_SRC_ROOT = $(STM_CUBE_HOME)/Drivers
 CMSIS_DIR = $(STM_SRC_ROOT)/CMSIS
 LL_DIR = $(STM_SRC_ROOT)/BSP/Components
 USBH_DIR = $(STM_CUBE_HOME)/Middlewares/ST/STM32_USB_Host_Library
+USBD_DIR = $(STM_CUBE_HOME)/Middlewares/ST/STM32_USB_Device_Library
 FATFS_DIR = $(STM_CUBE_HOME)/Middlewares/Third_Party/FatFs/src
 
 ifndef device
@@ -65,6 +66,15 @@ USBH_SRC += $(wildcard $(USBH_DIR)/Class/AUDIO/Src/*.c)
 USBH_SRC += $(wildcard $(USBH_DIR)/Class/MSC/Src/*.c)
 endif
 
+USBH_INCLUDES += -I$(USBD_DIR)/Core/Inc -I$(USBD_DIR)/Class/AUDIO/Inc -I$(USBD_DIR)/Class/MSC/Inc
+USBH_INCLUDES += -I$(USBD_DIR)/Class/CDC/Inc 
+
+USBH_SRC += $(filter $(SRC_FILTER), $(wildcard $(USBD_DIR)/Core/Src/*.c))
+USBH_SRC += $(wildcard $(USBD_DIR)/Core/Src/*.c)
+USBH_SRC += $(wildcard $(USBD_DIR)/Class/AUDIO/Src/*.c)
+USBH_SRC += $(wildcard $(USBD_DIR)/Class/CDC/Src/*.c)
+
+
 ifeq ($(USE_FATFS),1)
 $(info including FatFS...)
 FATFS_INCLUDES += -I$(FATFS_DIR) -I$(FATFS_DIR)/drivers
@@ -76,8 +86,8 @@ endif
 SYS_INCLUDES = $(CMSIS_INCLUDES) $(HAL_INCLUDES) $(BSP_INCLUDES) $(USBH_INCLUDES) $(FATFS_INCLUDES)
 SYS_SRC = $(CMSIS_SRC) $(HAL_SRC) $(BSP_SRC) $(LL_SRC) $(USBH_SRC) $(FATFS_SRC)
 
-USER_INCLUDES += -I$(USER_SRC_DIR) -Iext -I$(GEN_DSP_DIR) -I$(USER_SRC_DIR)/heavystatic
-USER_SRC += $(wildcard $(USER_SRC_DIR)/heavystatic/*.c) $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c) $(wildcard $(GEN_DSP_DIR)/*.c)
+USER_INCLUDES += -I$(USER_SRC_DIR) -Iext -I$(GEN_DSP_DIR) -I$(USER_SRC_DIR)/heavystatic -I$(USER_SRC_DIR)/usb
+USER_SRC += $(wildcard $(USER_SRC_DIR)/heavystatic/*.c) $(wildcard $(USER_SRC_DIR)/usb/*.c) $(wildcard $(USER_SRC_DIR)/common/*.c) $(wildcard $(USER_SRC_DIR)/$(module)/*.c) $(wildcard $(GEN_DSP_DIR)/*.c)
 USER_CPP_SRC += $(wildcard $(USER_SRC_DIR)/heavystatic/*.cpp) $(wildcard $(USER_SRC_DIR)/common/*.cpp) $(wildcard $(USER_SRC_DIR)/$(module)/*.cpp) $(wildcard $(GEN_DSP_DIR)/*.cpp)
 
 ALL_INCLUDES = $(USER_INCLUDES) $(SYS_INCLUDES)
@@ -95,10 +105,10 @@ LIBS += -lm -lstdc++
 LIBS += -larm_cortexM7lfsp_math
 
 CFLAGS += -std=c11 -fsigned-char -ffunction-sections -fdata-sections -Wall
-CFLAGS += -DNO_LIBSNDFILE -D__unix
+CFLAGS += -DNO_LIBSNDFILE -D__unix -DUSE_HAL_DRIVER -DUSE_USB_FS -DUSE_IOEXPANDER
 
 CPPFLAGS += -std=c++11 -fsigned-char -ffunction-sections -fdata-sections -Wall
-CPPFLAGS += -DNO_LIBSNDFILE -D__unix
+CPPFLAGS += -DNO_LIBSNDFILE -D__unix -DUSE_HAL_DRIVER -DUSE_USB_FS -DUSE_IOEXPANDER
 
 LD_FLAGS += -Lmake/devices -L$(LIB_DIR) -L/Users/Arthur/arm/STM32Cube_FW_F7_V1.4.0/Drivers/CMSIS/Lib/GCC
 LD_FLAGS += -Xlinker --gc-sections -Wl,-Map,$(BIN_DIR)/$(TARGET_NAME).map

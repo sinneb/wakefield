@@ -13,7 +13,6 @@ Wakefield STM32f7 Synthesizer
 #include "stm32746g_discovery_audio.h"
 #include "stm32746g_discovery_lcd.h"
 #include "stm32746g_discovery_ts.h"
-#include "stm32746g_discovery_sd.h"
 #include "stm32f7xx_hal.h"
 #include "common/clockconfig.h"
 
@@ -24,6 +23,9 @@ Wakefield STM32f7 Synthesizer
 #include "Heavy_patch2.h"
 #include "Heavy_patch3.h"
 #include "Heavy_patch4.h"
+
+#include "main.h"
+#include "usbd_desc.h"
 
 // defines
 #define VOLUME 50
@@ -37,11 +39,15 @@ static int16_t int_bufProcessedOut[AUDIO_DMA_BUFFER_SIZE];
 static uint8_t audioOutBuf[AUDIO_DMA_BUFFER_SIZE];
 extern SAI_HandleTypeDef haudio_out_sai;
 
-// midi
+// DIN midi
 UART_HandleTypeDef uart_config;
 uint8_t midicounter=0;
 int16_t mididata[3] = {0,-1,-1};
 uint8_t rx_byte[1];
+
+// USB midi
+//#include "usb_device.h"
+USBD_HandleTypeDef USBD_Device;
 
 // touch
 uint8_t runOnce;
@@ -79,14 +85,33 @@ void printHook(HeavyContextInterface *thecontext, const char *printLabel, const 
   //BSP_LCD_DisplayStringAt(150, 150, (uint8_t *)msgString, LEFT_MODE);
 }
 
+void blaat(uint8_t *msg, uint32_t len) {
+  
+}
+
+
 int main() {
   CPU_CACHE_Enable();
   HAL_Init();
-  SystemClock_Config(); 
+  SystemClock_Config();
+  
+  USBD_Init(&USBD_Device, &AUDIO_Desc, 0);
+  
+  /* Add Supported Class */
+  USBD_RegisterClass(&USBD_Device, USBD_AUDIO_CLASS);
+  
+  /* Add Interface callbacks for AUDIO Class */
+  USBD_AUDIO_RegisterInterface(&USBD_Device, &USBD_AUDIO_fops);
+  
+  /* Start Device Process */
+  USBD_Start(&USBD_Device);
+  
+  //MX_USB_DEVICE_Init();
   
   // config UART for MIDI communication
-  UART6_Config();
+  //UART6_Config();
   
+
   // led and pushbutton config
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Off(LED_GREEN);
@@ -94,16 +119,17 @@ int main() {
   
   // Init LCD and Touchscreen
   BSP_LCD_Init();
-  if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
-    BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
-	  BSP_TS_ITConfig();
-  }  
+  BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
+  // if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
+  //   BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
+  //     BSP_TS_ITConfig();
+  // }
   
   // GUI init
   drawGui();
 
   // start audio system
-  initAudio();
+  //initAudio();
   
   context1 = hv_wakefield_new(sampleRate);
   context2 = hv_patch2_new(sampleRate);
@@ -112,14 +138,14 @@ int main() {
   hv_setPrintHook(context1, &printHook);
 
   // init ADC and DMA
-  ConfigureADC();
-  ConfigureDMA();
-  HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
+  //ConfigureADC();
+  //ConfigureDMA();
+  //HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
 
   // main loop
   //int blah = 0;
   while (1) {
-
+    
     // print HALtick
     char a[] = "";
     sprintf(a, "%d", (int)HAL_GetTick());
@@ -360,6 +386,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
           // button
           if(gui_elements[i][4]==1) {
             // do buttonevent
+            USBD_Start(&USBD_Device);
             //gui_elements[0][7]= 75;
             //context1 = hv_patch2_new(sampleRate);
             //BSP_LCD_DisplayStringAt(50, 250, (uint8_t *)"initAudio error", LEFT_MODE);
@@ -466,6 +493,11 @@ void USART6_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&uart_config);
 }
+
+
+
+
+
 
 // UART (MIDI) HANDLING --------------------------------------------
 
@@ -658,7 +690,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* AdcHandle)
         }
       
       
-      BSP_LED_Toggle(LED_GREEN);
+      //BSP_LED_Toggle(LED_GREEN);
         //g_ADCValue = ADCchannelValues[2];
       
       //g_ADCValue = g_ADCBuffer[2];//std::accumulate(g_ADCBuffer, g_ADCBuffer + ADC_BUFFER_LENGTH, 0) / ADC_BUFFER_LENGTH;
