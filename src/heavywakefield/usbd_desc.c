@@ -57,11 +57,11 @@
 #define USBD_LANGID_STRING            0x409
 #define USBD_MANUFACTURER_STRING      "STMicroelectronics"
 #define USBD_PRODUCT_HS_STRING        "STM32 AUDIO Streaming in HS Mode"
-#define USBD_PRODUCT_FS_STRING        "STM32 AUDIO Streaming in FS Mode"
+#define USBD_PRODUCT_FS_STRING        "Heavy Wakefield MIDI"
 #define USBD_CONFIGURATION_HS_STRING  "AUDIO Config"
 #define USBD_INTERFACE_HS_STRING      "AUDIO Interface"
-#define USBD_CONFIGURATION_FS_STRING  "AUDIO Config"
-#define USBD_INTERFACE_FS_STRING      "AUDIO Interface"
+#define USBD_CONFIGURATION_FS_STRING  "MIDI Config"
+#define USBD_INTERFACE_FS_STRING      "MIDI Interface"
 
 /* Private macro -------------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/

@@ -55,6 +55,7 @@
 #include "usbd_desc.h"
 #include "usbd_audio.h"
 #include "usbd_audio_if.h"
+#include "usbd_midi_if.h"
 #include "stm32746g_discovery_audio.h"
 
 /* Exported types ------------------------------------------------------------*/

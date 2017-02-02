@@ -26,6 +26,7 @@ Wakefield STM32f7 Synthesizer
 
 #include "main.h"
 #include "usbd_desc.h"
+#include "usbd_midi.h"
 
 // defines
 #define VOLUME 50
@@ -96,13 +97,10 @@ int main() {
   SystemClock_Config();
   
   USBD_Init(&USBD_Device, &AUDIO_Desc, 0);
-  
   /* Add Supported Class */
-  USBD_RegisterClass(&USBD_Device, USBD_AUDIO_CLASS);
-  
+  USBD_RegisterClass(&USBD_Device, &USBD_Midi_ClassDriver);
   /* Add Interface callbacks for AUDIO Class */
-  USBD_AUDIO_RegisterInterface(&USBD_Device, &USBD_AUDIO_fops);
-  
+  USBD_Midi_RegisterInterface(&USBD_Device, &USBD_Midi_fops);
   /* Start Device Process */
   USBD_Start(&USBD_Device);
   
@@ -111,7 +109,6 @@ int main() {
   // config UART for MIDI communication
   //UART6_Config();
   
-
   // led and pushbutton config
   BSP_LED_Init(LED_GREEN);
   BSP_LED_Off(LED_GREEN);
@@ -119,17 +116,17 @@ int main() {
   
   // Init LCD and Touchscreen
   BSP_LCD_Init();
-  BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
-  // if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
-  //   BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
-  //     BSP_TS_ITConfig();
-  // }
+  //BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
+  if (BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK) {
+    BSP_LCD_LayerDefaultInit(0, LCD_FB_START_ADDRESS);
+      BSP_TS_ITConfig();
+  }
   
   // GUI init
   drawGui();
 
   // start audio system
-  //initAudio();
+  initAudio();
   
   context1 = hv_wakefield_new(sampleRate);
   context2 = hv_patch2_new(sampleRate);
@@ -138,9 +135,9 @@ int main() {
   hv_setPrintHook(context1, &printHook);
 
   // init ADC and DMA
-  //ConfigureADC();
-  //ConfigureDMA();
-  //HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
+  // ConfigureADC();
+  // ConfigureDMA();
+  // HAL_ADC_Start_DMA(&g_AdcHandle, g_ADCBuffer, ADC_BUFFER_LENGTH);
 
   // main loop
   //int blah = 0;
