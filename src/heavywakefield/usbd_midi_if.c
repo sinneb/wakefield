@@ -1,5 +1,6 @@
 #include "usbd_midi_if.h"
 #include "stm32746g_discovery.h"
+#include "stm32746g_discovery_lcd.h"
 
 static int8_t Midi_Receive(uint8_t *msg, uint32_t len);
 
@@ -17,6 +18,10 @@ static int8_t Midi_Receive(uint8_t *msg, uint32_t len) {
 	uint16_t b = ((b2 & 0x7f) << 7) | (b1 & 0x7f);
   
   BSP_LED_Toggle(LED_GREEN);
+  
+  char a[] = "";
+  sprintf(a, "%d", b1);
+  BSP_LCD_DisplayStringAt(10, 50, (uint8_t *)a, LEFT_MODE);
 
 	// switch (msgtype) {
 //   case 0x80:
